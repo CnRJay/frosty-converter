@@ -1,13 +1,15 @@
 # `.fbproject` format (Frosty Toolsuite 1.0.6.x)
 
-Reference: `Frosty.Core.FrostyProject` in FrostyPlugin.
+Reference: `Frosty.Core.FrostyProject` in FrostyPlugin / Frosty Toolsuite.
+
+FrostyConvert writes stock-style **v14** projects offline. MMC forks may use **v17** and should be produced via **live import + Save** when editing RIFF EBX (CFB/Madden). See [../mmc-import.md](../mmc-import.md).
 
 ## Header
 
 | Field | Type | Notes |
 |-------|------|-------|
 | magic | u64 | `0x00005954534F5246` (`FROSTY` + `0x0000`) |
-| version | u32 | Current: **14** |
+| version | u32 | Stock Frosty: **14**; MMC observed up to **17** |
 | gameProfile | null-terminated string | Must match loaded profile |
 | creationDate | i64 | `DateTime.Ticks` |
 | modifiedDate | i64 | `DateTime.Ticks` |

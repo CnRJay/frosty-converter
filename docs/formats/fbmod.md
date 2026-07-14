@@ -1,15 +1,24 @@
 # `.fbmod` format (Frosty Toolsuite 1.0.6.x)
 
-Reference: `third_party/FrostyToolsuite` (CadeEvs/FrostyToolsuite `1.0.6.3`).
+Reference: [CadeEvs/FrostyToolsuite](https://github.com/CadeEvs/FrostyToolsuite) (e.g. `1.0.6.3`).
 
 ## Variants
 
 | Kind | Detection | Payload storage |
 |------|-----------|-----------------|
-| **Binary** (v1–v5) | Magic `0x01005954534F5246` (`FROSTY` + `0x0001`) | Inline data section after resource table |
+| **Binary** (v1–v7) | Magic `0x01005954534F5246` (`FROSTY` + `0x0001`) | Inline data section after resource table |
 | **Legacy** | No binary magic; DbObject header | External `name_NN.archive` sidecars |
 
-FrostyConvert Phase 1 fully documents and inspects **binary** mods. Legacy is detected and reported; full legacy import comes with conversion work.
+FrostyConvert fully inspects and converts **binary** mods. Legacy is detected and reported; full legacy import is not implemented yet.
+
+### Tooling
+
+```bash
+dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect
+dotnet run --project src/FrostyConvert.Cli -- mod.fbmod -o recovered.fbproject
+```
+
+For CFB/Madden editing, prefer live import: [../mmc-import.md](../mmc-import.md).
 
 ## Binary header
 

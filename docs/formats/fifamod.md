@@ -57,12 +57,14 @@ Gameplay EBX decompresses to **RIFF** (`EBXD` / `EFIX`).
 
 ## RES / Chunk
 
-Similar index tables with type-specific fields (see `Modding.ModReader` decompilation). Chunks use GUID names and `ChunkFlags`.
+Similar index tables with type-specific fields (type, RID/meta for res; GUID + flags for chunks).
 
 ## Recovery tooling
 
-See [docs/fifa-import.md](../fifa-import.md): convert to `.fifaproject` for FIFA Editor Tool (no plugin API available).
+FIFA Editor Tool has no plugin API. Convert offline, then open the project with the game loaded:
 
-```text
-fbmod2project "mod.fifamod" -o recovered.fifaproject
+```bash
+dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
 ```
+
+See [../fifa-import.md](../fifa-import.md) for the full workflow and CAS payload notes.

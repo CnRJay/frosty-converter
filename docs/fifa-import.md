@@ -2,51 +2,60 @@
 
 ## Why this is not an MMC-style plugin
 
-| | **MMC (CFB/Madden)** | **FIFA Editor Tool v2** |
-|--|----------------------|-------------------------|
-| Host | Frosty fork with `Plugins/` | Closed **single-file** .NET app (~155 MB) |
-| Extension API | `RegisterMenuExtension` | **None** (no `PluginManager`, no Plugins folder) |
+| | **MMC (CFB/Madden)** | **FIFA Editor Tool** |
+|--|----------------------|----------------------|
+| Host | Frosty fork with `Plugins/` | Closed **single-file** .NET app |
+| Extension API | `RegisterMenuExtension` | **None** |
 | Live import | `FrostyConvert.MmcPlugin` → Tools → Import `.fbmod` | Not possible as a drop-in DLL |
 | Project format | `.fbproject` | `.fifaproject` (magic `FETP`) |
 
-FIFA Editor Tool embeds `Modding.dll` / `Sdk.dll` / `FIFAEditorTool.dll` inside the exe. It can **export** `.fifamod` from a project and the Mod Manager can **apply** them, but there is no public menu-extension surface equivalent to MMC.
+FIFA Editor Tool can **export** `.fifamod` and the Mod Manager can **apply** them, but there is no public menu-extension surface like MMC.
 
-## Equivalent workflow (same end state as MMC import)
+## Workflow (same end state as MMC import)
 
-MMC:
+| MMC | FIFA Editor Tool + FrostyConvert |
+|-----|----------------------------------|
+| Load game profile | Load game (e.g. FC26) |
+| Tools → Import `.fbmod` | CLI: convert `.fifamod` → `.fifaproject` |
+| Edit assets | File → Open Project → edit assets |
+| File → Save As `.fbproject` | Save project / export a new `.fifamod` |
 
-1. Load game profile  
-2. Tools → Import Frosty Mod (`.fbmod`)  
-3. Edit assets  
-4. File → Save As `.fbproject`
+### Convert
 
-FIFA Editor Tool (via FrostyConvert):
+```bash
+dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
+```
 
-1. Convert the abandoned mod:
-   ```text
-   fbmod2project "mod.fifamod" -o recovered.fifaproject
-   ```
-2. Open **FIFA Editor Tool**, load **FC26** (or matching game)  
-3. **File → Open Project** → `recovered.fifaproject`  
-4. Edit assets in the property grid  
-5. **Save** project / export a new `.fifamod`
+Optional: `--inspect` first to list resources; `--oodle path` if the Oodle DLL is not next to the CLI.
 
-Opening the project with the game loaded rehydrates RIFF EBX through FET’s live `EbxReader` + SDK types—the same reason the MMC plugin had to import live instead of only writing offline projects.
+### Open in the editor
+
+1. Launch **FIFA Editor Tool** and load the matching game.
+2. **File → Open Project** → `recovered.fifaproject`.
+3. Edit assets in the property grid.
+4. Save the project and/or export a new mod.
+
+With the game loaded, FET rehydrates EBX through its live SDK types—the same reason MMC needs live import for RIFF assets.
 
 ## What the converter writes
 
-- Official **FETM** `.fifamod` parse (`Modding.ModReader.ReadNewFormat` layout)
-- CAS + Oodle type **0x19** decompress → RIFF EBX
-- **FETP** v2 `.fifaproject` with modified EBX stored as **CAS-compressed** blobs (same as the `.fifamod`).  
-  FET’s `AssetManager.GetEbx` always runs `Decompression.Decompress` on `ModifiedEntry.Data`, which requires a codec header with **guard bits = 7**. Storing raw RIFF fails with `Invalid guard bits in codec header: expected 7, got 0x0`.
+- Official **FETM** `.fifamod` layout (`Modding.ModReader.ReadNewFormat`)
+- CAS + Oodle (codec family **0x19** / Leviathan) for payloads
+- **FETP** v2 `.fifaproject` with modified EBX stored as **CAS-compressed** blobs (same framing as the mod)
+
+FET’s `AssetManager.GetEbx` always runs `Decompression.Decompress` on `ModifiedEntry.Data`. That path requires a codec header with **guard bits = 7**. Storing raw RIFF fails with:
+
+```text
+Invalid guard bits in codec header: expected 7, got 0x0
+```
 
 ## Limits
 
-- Offline conversion cannot fill `AssetSha1AtImport` from the live game (zeros). FET still loads modified data; out-of-date checks may warn.
-- Chunk/res tables are written when present; complex legacy/collector cases may need FET re-save.
-- Password-locked mods (FMT salt footer) are not supported yet.
+- Offline conversion cannot fill `AssetSha1AtImport` from the live game (zeros are written). FET still loads modified data; out-of-date checks may warn.
+- Chunk/res entries are written when present; complex legacy/collector cases may need a re-save inside FET.
+- Password-locked mods are not supported yet.
 
-## Install paths (example)
+## Related docs
 
-- Editor: `d:\fifa mods\FIFA Editor Tool v2.0.4\`
-- Oodle: `oodle-data-shared.dll` next to the CLI (or `--oodle path`)
+- Format notes: [formats/fifamod.md](formats/fifamod.md)
+- Root overview: [../README.md](../README.md)

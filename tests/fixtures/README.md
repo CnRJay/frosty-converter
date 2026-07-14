@@ -1,27 +1,36 @@
 # Test fixtures
 
-Drop real mod samples here for **local** testing. This directory is **gitignored** (except this README) so third-party mods are not published to GitHub.
+Local-only sample mods for development and tests.
 
-## Suggested layout
+This directory is **gitignored** except this README and `.gitkeep`, so third-party mods are never published with the repo.
+
+## Suggested files
+
+| File | Used for |
+|------|----------|
+| `*.fbmod` | CLI inspect / offline `.fbproject` / MMC plugin import |
+| `*.fifamod` | CLI inspect / `.fifaproject` conversion |
 
 ```text
 tests/fixtures/
-  cnr-gameplaymod.fbmod          # CFB / Madden binary Frosty mod
-  some-gameplay.fifamod          # FIFA Editor Tool / FMM mod
+  example-gameplay.fbmod
+  example-gameplay.fifamod
 ```
 
-## Commands
+## CLI against a local sample
 
 ```bash
-# Frosty .fbmod
-dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/mod.fbmod --inspect
-dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/mod.fbmod -o recovered.fbproject
+# Frosty / MMC
+dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/example.fbmod --inspect
+dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/example.fbmod -o recovered.fbproject
 
-# FIFA .fifamod → open result in FIFA Editor Tool with game loaded
-dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/mod.fifamod --inspect
-dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/mod.fifamod -o recovered.fifaproject
+# FIFA Editor Tool
+dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/example.fifamod --inspect
+dotnet run --project src/FrostyConvert.Cli -- tests/fixtures/example.fifamod -o recovered.fifaproject
 ```
 
-## MMC live import (CFB / Madden)
+## Notes
 
-Offline `.fbproject` is not enough for RIFF EBX property-grid editing. Build the MMC plugin and use **Tools → Import Frosty Mod** instead — see root README.
+- **CFB / Madden:** offline `.fbproject` is not enough for property-grid editing of RIFF EBX. Prefer the MMC plugin (**Tools → Import Frosty Mod**). See [docs/mmc-import.md](../../docs/mmc-import.md).
+- **FIFA / FC:** convert to `.fifaproject`, then open in FIFA Editor Tool with the game loaded. See [docs/fifa-import.md](../../docs/fifa-import.md).
+- Unit tests look for `tests/fixtures/*.fifamod` (and related samples) when present; they still pass without them where fixtures are optional.
