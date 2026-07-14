@@ -75,12 +75,17 @@ if (-not $SkipPlugin) {
     Write-Host "==> Building MMC plugin..." -ForegroundColor Cyan
     $pluginProj = Join-Path $Root "src\FrostyConvert.MmcPlugin\FrostyConvert.MmcPlugin.csproj"
 
+    $pluginBuildArgs = @(
+        "build", $pluginProj,
+        "-c", $Configuration,
+        "-p:Version=$Version",
+        "-p:SkipMmcDeploy=true"
+    )
     if ($MmcEditorDir) {
-        & dotnet build $pluginProj -c $Configuration -p:Version=$Version -p:MmcEditorDir=$MmcEditorDir
-    } else {
-        & dotnet build $pluginProj -c $Configuration -p:Version=$Version
+        $pluginBuildArgs += "-p:MmcEditorDir=$MmcEditorDir"
     }
-    if ($LASTEXITCODE -ne 0) { throw "dotnet build MMC plugin failed" }
+    & dotnet @pluginBuildArgs
+    if ($LASTEXITCODE -ne 0) { throw "dotnet build MMC plugin failed (exit $LASTEXITCODE)" }
 
     $pluginBin = Join-Path $Root "src\FrostyConvert.MmcPlugin\bin\$Configuration"
     $pluginDll = Join-Path $pluginBin "FrostyConvert.MmcPlugin.dll"

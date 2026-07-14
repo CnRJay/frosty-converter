@@ -1,6 +1,7 @@
-## Build
-bin/
-obj/
+## Build (do not use bare "bin/" — it would ignore third_party/oodle/bin)
+src/**/bin/
+tests/**/bin/
+**/obj/
 out/
 *.user
 *.suo

@@ -95,17 +95,24 @@ jobs:
       - name: Pack release zips
         shell: pwsh
         run: |
-          ./scripts/pack-release.ps1 -Version "${{ steps.ver.outputs.version }}" -Configuration Release
-
-      - name: List artifacts
-        shell: pwsh
-        run: Get-ChildItem dist -Filter *.zip | Format-Table Name, Length
+          $ErrorActionPreference = "Stop"
+          $ver = "${{ steps.ver.outputs.version }}"
+          Write-Host "Packing version $ver"
+          Get-ChildItem third_party/mmc-refs | ForEach-Object { Write-Host "ref: $($_.Name)" }
+          Get-ChildItem third_party/oodle/bin -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "oodle: $($_.Name)" }
+          & pwsh -NoProfile -File ./scripts/pack-release.ps1 -Version $ver -Configuration Release
+          if ($LASTEXITCODE -ne 0) { throw "pack-release.ps1 failed with exit $LASTEXITCODE" }
+          Get-ChildItem dist -Filter *.zip | ForEach-Object { Write-Host "zip: $($_.Name) $($_.Length)" }
+          if (-not (Test-Path "dist/FrostyConvert-FifaTool-v$ver-win-x64.zip")) { throw "Missing FIFA tool zip" }
+          if (-not (Test-Path "dist/FrostyConvert-MmcPlugin-v$ver.zip")) { throw "Missing MMC plugin zip" }
 
       - name: Create GitHub Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
+          name: FrostyConvert v${{ steps.ver.outputs.version }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/FrostyConvert-FifaTool-v${{ steps.ver.outputs.version }}-win-x64.zip
             dist/FrostyConvert-MmcPlugin-v${{ steps.ver.outputs.version }}.zip
@@ -128,12 +135,14 @@ jobs:
             3. Copy `oodle-data-shared.dll` next to the MMC editor **exe**.
             4. Restart MMC → load profile → **Tools → Import Frosty Mod (.fbmod)…**
 
-            See INSTALL.txt inside each zip and the repository README.
+            See `INSTALL.txt` inside each zip and the repository README.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts (workflow_dispatch / always)
+      - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: FrostyConvert-v${{ steps.ver.outputs.version }}
           path: dist/*.zip
+          if-no-files-found: ignore
