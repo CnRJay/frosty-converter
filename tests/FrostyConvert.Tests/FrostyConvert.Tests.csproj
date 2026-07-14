@@ -28,10 +28,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>oodle-data-shared.dll</Link>
     </None>
-    <None Include="..\fixtures\*.fifamod" Condition="Exists('..\fixtures')">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>fixtures\%(Filename)%(Extension)</Link>
-    </None>
   </ItemGroup>
 
 </Project>
