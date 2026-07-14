@@ -61,3 +61,4 @@ tools/
 !tests/**/*.fbproject
 report.json
 *.bak
+/FrostyToolsuite
