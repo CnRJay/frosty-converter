@@ -14,6 +14,11 @@
     <Version>1.0.0</Version>
     <Product>FrostyConvert</Product>
     <Description>Recover editable projects from Frosty .fbmod and FIFA .fifamod files</Description>
+    <!-- Release zips: single-file self-contained exe (+ oodle-data-shared.dll beside it). -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

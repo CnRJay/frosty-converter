@@ -20,13 +20,14 @@ Prebuilt Windows packages are attached to each [GitHub Release](../../releases):
 
 ### FIFA tool install
 
-1. Download **FifaTool** zip → unzip to any folder (keep all files together).
+1. Download **FifaTool** zip → unzip (only **3 files**: `fbmod2project.exe`, `oodle-data-shared.dll`, `INSTALL.txt`).
 2. Run:
    ```bat
    fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
    ```
 3. In FIFA Editor Tool: load the game → **File → Open Project** → `recovered.fifaproject`.
 
+Keep the `.exe` and `oodle-data-shared.dll` in the same folder.
 ### MMC plugin install
 
 1. Download **MmcPlugin** zip → close MMC Editor.

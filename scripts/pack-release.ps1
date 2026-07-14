@@ -53,14 +53,24 @@ if (-not $SkipCli) {
         -c $Configuration `
         -r win-x64 `
         --self-contained true `
-        -p:PublishSingleFile=false `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
         -p:Version=$Version `
         -o $cliOut
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish CLI failed" }
 
+    # Keep only: single-file exe + native Oodle + INSTALL
+    Get-ChildItem $cliOut -File | Where-Object {
+        $_.Name -notin @("fbmod2project.exe", "INSTALL.txt") -and
+        $_.Extension -ne ".exe"
+    } | Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $cliOut -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem $cliOut -Filter *.json -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem $cliOut -Filter *.dll -ErrorAction SilentlyContinue | Remove-Item -Force
+
     Copy-Item $Oodle $cliOut -Force
     Copy-Item (Join-Path $Root "packaging\FifaTool\INSTALL.txt") $cliOut -Force
-    Get-ChildItem $cliOut -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force
 
     $cliZip = Join-Path $Dist "FrostyConvert-FifaTool-v$Version-win-x64.zip"
     Compress-Archive -Path (Join-Path $cliOut "*") -DestinationPath $cliZip -Force

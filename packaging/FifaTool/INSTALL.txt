@@ -4,16 +4,15 @@ FrostyConvert — FIFA / EA FC tool (CLI)
 Convert compiled FIFA Editor Tool / Mod Manager .fifamod files into
 editable .fifaproject files.
 
-Contents
---------
-  fbmod2project.exe     — main tool (Windows x64, self-contained)
-  oodle-data-shared.dll — Oodle data decompression (required)
-  *.dll / runtime files — keep all files in the same folder
+Package contents (3 files)
+--------------------------
+  fbmod2project.exe     — single-file tool (Windows x64, .NET runtime embedded)
+  oodle-data-shared.dll — Oodle decompression (must stay next to the .exe)
   INSTALL.txt           — this file
 
 Quick start
 -----------
-1. Unzip this folder anywhere (do not scatter files).
+1. Unzip this folder anywhere (keep the .exe and .dll in the same folder).
 
 2. Open a terminal in this folder and run:
 
@@ -47,7 +46,7 @@ Flags
 Requirements
 ------------
 - Windows x64
-- No separate .NET install required (self-contained build)
+- No separate .NET install required (self-contained single-file build)
 - FIFA Editor Tool installed to open .fifaproject results
 
 Source repository: FrostyConvert (see GitHub Releases page for this project)
