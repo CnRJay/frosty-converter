@@ -9,8 +9,22 @@
     <AssemblyName>FrostyConvert.MmcPlugin</AssemblyName>
     <RootNamespace>FrostyConvert.MmcPlugin</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <MmcEditorDir Condition="'$(MmcEditorDir)' == ''">d:\cfb27 mods\MMC_Editor_v1.1.0.0</MmcEditorDir>
+    <!-- Prefer local MMC install; fall back to third_party/mmc-refs (compile-only copies). -->
+    <MmcEditorDir Condition="'$(MmcEditorDir)' == '' and Exists('d:\cfb27 mods\MMC_Editor_v1.1.0.0\FrostyCore.dll')">d:\cfb27 mods\MMC_Editor_v1.1.0.0</MmcEditorDir>
+    <MmcRefsDir Condition="'$(MmcRefsDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\third_party\mmc-refs'))</MmcRefsDir>
+    <_FrostyCore Condition="Exists('$(MmcEditorDir)\FrostyCore.dll')">$(MmcEditorDir)\FrostyCore.dll</_FrostyCore>
+    <_FrostyCore Condition="'$(_FrostyCore)' == '' and Exists('$(MmcRefsDir)\FrostyCore.dll')">$(MmcRefsDir)\FrostyCore.dll</_FrostyCore>
+    <_FrostySdk Condition="Exists('$(MmcEditorDir)\FrostySdk.dll')">$(MmcEditorDir)\FrostySdk.dll</_FrostySdk>
+    <_FrostySdk Condition="'$(_FrostySdk)' == '' and Exists('$(MmcRefsDir)\FrostySdk.dll')">$(MmcRefsDir)\FrostySdk.dll</_FrostySdk>
+    <_FrostyControls Condition="Exists('$(MmcEditorDir)\FrostyControls.dll')">$(MmcEditorDir)\FrostyControls.dll</_FrostyControls>
+    <_FrostyControls Condition="'$(_FrostyControls)' == '' and Exists('$(MmcRefsDir)\FrostyControls.dll')">$(MmcRefsDir)\FrostyControls.dll</_FrostyControls>
   </PropertyGroup>
+
+  <Target Name="EnsureMmcRefs" BeforeTargets="ResolveAssemblyReferences">
+    <Error
+      Condition="!Exists('$(_FrostyCore)') or !Exists('$(_FrostySdk)') or !Exists('$(_FrostyControls)')"
+      Text="MMC/Frosty reference assemblies not found. Copy FrostyCore.dll, FrostySdk.dll, and FrostyControls.dll from your MMC Editor folder into third_party/mmc-refs/ (or set MmcEditorDir)." />
+  </Target>
 
   <ItemGroup>
     <Compile Include="..\FrostyConvert.Core\IO\EndianBinaryReader.cs" Link="Core\EndianBinaryReader.cs" />
@@ -42,15 +56,15 @@
 
   <ItemGroup>
     <Reference Include="FrostyCore">
-      <HintPath>$(MmcEditorDir)\FrostyCore.dll</HintPath>
+      <HintPath>$(_FrostyCore)</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="FrostySdk">
-      <HintPath>$(MmcEditorDir)\FrostySdk.dll</HintPath>
+      <HintPath>$(_FrostySdk)</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="FrostyControls">
-      <HintPath>$(MmcEditorDir)\FrostyControls.dll</HintPath>
+      <HintPath>$(_FrostyControls)</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="PresentationCore" />
@@ -67,11 +81,16 @@
     </None>
   </ItemGroup>
 
-  <Target Name="DeployToMmc" AfterTargets="Build" Condition="Exists('$(MmcEditorDir)\Plugins')">
+  <Target Name="DeployToMmc" AfterTargets="Build" Condition="'$(MmcEditorDir)' != '' and Exists('$(MmcEditorDir)\Plugins')">
     <ItemGroup>
       <_Deploy Include="$(TargetPath)" />
       <_Deploy Include="$(TargetDir)K4os.Compression.LZ4.dll" Condition="Exists('$(TargetDir)K4os.Compression.LZ4.dll')" />
       <_Deploy Include="$(TargetDir)ZstdSharp.dll" Condition="Exists('$(TargetDir)ZstdSharp.dll')" />
+      <_Deploy Include="$(TargetDir)System.Buffers.dll" Condition="Exists('$(TargetDir)System.Buffers.dll')" />
+      <_Deploy Include="$(TargetDir)System.Memory.dll" Condition="Exists('$(TargetDir)System.Memory.dll')" />
+      <_Deploy Include="$(TargetDir)System.Numerics.Vectors.dll" Condition="Exists('$(TargetDir)System.Numerics.Vectors.dll')" />
+      <_Deploy Include="$(TargetDir)System.Runtime.CompilerServices.Unsafe.dll" Condition="Exists('$(TargetDir)System.Runtime.CompilerServices.Unsafe.dll')" />
+      <_Deploy Include="$(TargetDir)System.Threading.Tasks.Extensions.dll" Condition="Exists('$(TargetDir)System.Threading.Tasks.Extensions.dll')" />
     </ItemGroup>
     <!-- ContinueOnError: editor locks the DLL while running -->
     <Copy SourceFiles="@(_Deploy)" DestinationFolder="$(MmcEditorDir)\Plugins" SkipUnchangedFiles="true" ContinueOnError="WarnAndContinue" />

@@ -32,24 +32,31 @@ MMC’s project format is also **v17** (stock Frosty was often v14), with extra 
 
 ## Correct recovery path
 
-Use **FrostyConvert.MmcPlugin** with the game profile loaded:
+### From a GitHub Release (recommended)
+
+1. Download **`FrostyConvert-MmcPlugin-v*.zip`** from Releases.
+2. Close MMC. Copy `Plugins\*` → `<MMC Editor>\Plugins\`.
+3. Copy `oodle-data-shared.dll` next to the MMC editor **exe**.
+4. Start MMC → load profile → **Tools → Import Frosty Mod (.fbmod)…** → **File → Save As…**
+
+See `INSTALL.txt` in the zip.
+
+### From source
 
 | Step | Action |
 |------|--------|
-| 1 | `dotnet build src/FrostyConvert.MmcPlugin` |
-| 2 | Restart MMC (plugin DLLs lock while the editor runs) |
-| 3 | Load CFB27 / Madden (or matching) profile |
-| 4 | **Tools → Import Frosty Mod (.fbmod)…** |
-| 5 | **File → Save As…** a new `.fbproject` |
-
-The build deploys the plugin into MMC’s `Plugins` folder. Override the install root with MSBuild if needed:
+| 1 | Put Frosty DLLs in `third_party/mmc-refs/` or pass `-p:MmcEditorDir=...` |
+| 2 | `dotnet build src/FrostyConvert.MmcPlugin` (auto-deploys if `MmcEditorDir\Plugins` exists) |
+| 3 | Restart MMC (plugin DLLs lock while the editor runs) |
+| 4 | Load CFB27 / Madden (or matching) profile |
+| 5 | **Tools → Import Frosty Mod (.fbmod)…** |
+| 6 | **File → Save As…** a new `.fbproject` |
 
 ```bash
 dotnet build src/FrostyConvert.MmcPlugin -p:MmcEditorDir="C:\path\to\MMC_Editor"
 ```
 
-Also ensure `oodle-data-shared.dll` sits next to the MMC editor exe (the build copies it when available).
-
+Or pack a release-style zip locally: `.\scripts\pack-release.ps1`
 ## What the plugin does
 
 1. Parses binary `.fbmod` (v1–v7 resource table)

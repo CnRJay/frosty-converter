@@ -51,6 +51,13 @@ third_party/fet_extract/
 third_party/**/decompiled/
 tools/
 
+## MMC compile-only refs (copy from your MMC install; not redistributed)
+third_party/mmc-refs/*.dll
+
+## Release output
+dist/
+artifacts/
+
 ## Vendored Frosty reference clone (large; optional local only)
 ## Uncomment the next line if you do not want FrostyToolsuite on GitHub:
 # FrostyToolsuite/

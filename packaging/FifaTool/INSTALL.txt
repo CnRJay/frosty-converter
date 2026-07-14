@@ -1,0 +1,53 @@
+FrostyConvert — FIFA / EA FC tool (CLI)
+======================================
+
+Convert compiled FIFA Editor Tool / Mod Manager .fifamod files into
+editable .fifaproject files.
+
+Contents
+--------
+  fbmod2project.exe     — main tool (Windows x64, self-contained)
+  oodle-data-shared.dll — Oodle data decompression (required)
+  *.dll / runtime files — keep all files in the same folder
+  INSTALL.txt           — this file
+
+Quick start
+-----------
+1. Unzip this folder anywhere (do not scatter files).
+
+2. Open a terminal in this folder and run:
+
+     fbmod2project.exe "path\to\mod.fifamod" --inspect
+     fbmod2project.exe "path\to\mod.fifamod" -o recovered.fifaproject
+
+3. Open FIFA Editor Tool, load the matching game (e.g. FC26).
+
+4. File → Open Project → recovered.fifaproject
+
+5. Edit assets, then save / export a new mod if desired.
+
+Also works for Frosty .fbmod inventory and offline .fbproject:
+
+     fbmod2project.exe mod.fbmod --inspect
+     fbmod2project.exe mod.fbmod -o recovered.fbproject
+
+(CFB/Madden property-grid editing still needs the MMC plugin package.)
+
+Flags
+-----
+  --inspect              List assets in the mod
+  -o, --output PATH      Write .fifaproject or .fbproject
+  --json                 JSON report
+  --report PATH          Write JSON report to a file
+  --extract DIR          Dump raw payloads
+  --oodle PATH           Override Oodle DLL
+  --inspect-project      Summarize a .fbproject
+  -h, --help             Help
+
+Requirements
+------------
+- Windows x64
+- No separate .NET install required (self-contained build)
+- FIFA Editor Tool installed to open .fifaproject results
+
+Source repository: FrostyConvert (see GitHub Releases page for this project)

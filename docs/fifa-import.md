@@ -11,12 +11,19 @@
 
 ### Convert
 
+**Release zip** (`FrostyConvert-FifaTool-v*-win-x64.zip` from GitHub Releases):
+
+```bat
+fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
+```
+
+**From source:**
+
 ```bash
 dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
 ```
 
 Optional: `--inspect` first to list resources; `--oodle path` if the Oodle DLL is not next to the CLI.
-
 ### Open in the editor
 
 1. Launch **FIFA Editor Tool** and load the matching game.

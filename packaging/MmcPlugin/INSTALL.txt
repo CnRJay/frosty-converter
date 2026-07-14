@@ -1,0 +1,41 @@
+FrostyConvert — MMC Editor plugin
+=================================
+
+Import compiled Frosty .fbmod files into MMC (College Football / Madden) for live editing.
+
+Install
+-------
+1. Close MMC Editor completely.
+
+2. Copy everything from the "Plugins" folder in this zip into:
+
+     <MMC Editor>\Plugins\
+
+   Example:
+     C:\Games\MMC_Editor\Plugins\FrostyConvert.MmcPlugin.dll
+     C:\Games\MMC_Editor\Plugins\K4os.Compression.LZ4.dll
+     ... (all other DLLs from Plugins\)
+
+3. Copy oodle-data-shared.dll next to the MMC editor executable
+   (same folder as MMCEditor.exe / FrostyEditor.exe), NOT into Plugins.
+
+4. Start MMC Editor, load your game profile (e.g. CollegeFB27).
+
+5. Tools → Import Frosty Mod (.fbmod)…
+
+6. After import: File → Save As… a new .fbproject.
+
+Requirements
+------------
+- MMC Editor (Frosty-based) already installed
+- Game profile loaded before import
+- .NET Framework 4.8 (usually already present on Windows)
+
+Notes
+-----
+- Do not use offline .fbproject conversion alone for CFB/Madden RIFF EBX —
+  the property grid needs live import (this plugin).
+- If the menu item is missing, confirm the plugin DLL is under Plugins\
+  and that you restarted MMC after installing.
+
+Source repository: FrostyConvert (see GitHub Releases page for this project)

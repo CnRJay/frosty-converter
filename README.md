@@ -9,21 +9,50 @@ Recover **editable editor projects** from compiled Frostbite mods when the origi
 
 Both paths decompress CAS/Oodle payloads and rebuild projects you can keep maintaining after game updates.
 
+## Download (releases)
+
+Prebuilt Windows packages are attached to each [GitHub Release](../../releases):
+
+| Asset | What it is |
+|-------|------------|
+| **`FrostyConvert-FifaTool-v*-win-x64.zip`** | Self-contained CLI — convert `.fifamod` → `.fifaproject` (also inspects `.fbmod`) |
+| **`FrostyConvert-MmcPlugin-v*.zip`** | MMC Editor plugin — live import of `.fbmod` for CFB/Madden |
+
+### FIFA tool install
+
+1. Download **FifaTool** zip → unzip to any folder (keep all files together).
+2. Run:
+   ```bat
+   fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
+   ```
+3. In FIFA Editor Tool: load the game → **File → Open Project** → `recovered.fifaproject`.
+
+### MMC plugin install
+
+1. Download **MmcPlugin** zip → close MMC Editor.
+2. Copy everything under `Plugins\` into `<MMC Editor>\Plugins\`.
+3. Copy `oodle-data-shared.dll` next to the MMC **editor executable** (not into Plugins).
+4. Start MMC → load profile → **Tools → Import Frosty Mod (.fbmod)…** → **File → Save As…** project.
+
+Each zip includes an `INSTALL.txt` with the same steps.
+
 ## Requirements
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) (CLI and tests)
-- .NET Framework 4.8 (MMC plugin only)
-- Oodle data DLL (bundled as `third_party/oodle/bin/oodle-data-shared.dll`)
+**Building from source:**
 
-## Build
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- .NET Framework 4.8 targeting pack (MMC plugin)
+- Oodle DLL under `third_party/oodle/bin/` (or downloaded by CI)
+- For the plugin: Frosty/MMC reference DLLs in `third_party/mmc-refs/` or `MmcEditorDir` (see `third_party/mmc-refs/README.md`)
+
+## Build from source
 
 ```bash
 dotnet build FrostyConvert.slnx
 dotnet test tests/FrostyConvert.Tests
 ```
 
-CLI entry project: `src/FrostyConvert.Cli` (assembly name `fbmod2project`).
-
+CLI project: `src/FrostyConvert.Cli` (assembly name `fbmod2project`).
 ## CLI
 
 ```bash
@@ -54,27 +83,25 @@ dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect --oodle path/t
 
 ## Workflow: College Football / Madden (`.fbmod`)
 
-CFB/Madden gameplay EBX is **RIFF**. Offline `.fbproject` files may open in the asset list but **crash the property grid**. Prefer live import.
+CFB/Madden gameplay EBX is **RIFF**. Offline `.fbproject` files may open in the asset list but **crash the property grid**. Prefer the **MMC plugin** (from Releases or build from source).
 
-1. Build the plugin:
+1. Install the plugin (see [Download](#download-releases) above), or build:
    ```bash
-   dotnet build src/FrostyConvert.MmcPlugin
+   dotnet build src/FrostyConvert.MmcPlugin -p:MmcEditorDir="C:\path\to\MMC_Editor"
    ```
-   On success it copies into your MMC `Plugins` folder (set `MmcEditorDir` on the project if needed).
-
 2. Restart **MMC Editor**, load the game profile (e.g. CollegeFB27).
-
 3. **Tools → Import Frosty Mod (.fbmod)…**
-
-4. **File → Save As…** a new `.fbproject` so MMC re-serializes assets correctly.
+4. **File → Save As…** a new `.fbproject`.
 
 Details: [docs/mmc-import.md](docs/mmc-import.md).
 
 ## Workflow: EA FC / FIFA (`.fifamod`)
 
-FIFA Editor Tool is a closed single-file app with **no plugin API**. Convert offline, then open the project in the editor:
+FIFA Editor Tool has **no plugin API**. Use the **FifaTool** release zip (or CLI from source):
 
 ```bash
+fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
+# or from source:
 dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
 ```
 
@@ -83,7 +110,6 @@ dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifapro
 3. Edit assets, then save / re-export a mod.
 
 Details: [docs/fifa-import.md](docs/fifa-import.md).
-
 ## Oodle
 
 Frostbite mods commonly use Oodle. This repo uses:
@@ -99,11 +125,14 @@ You do not need a game `oo2core_*.dll` for typical CFB/Madden or FC26 mods.
 src/FrostyConvert.Core/       Shared parsers and converters
 src/FrostyConvert.Cli/       Command-line tool
 src/FrostyConvert.MmcPlugin/ MMC Editor import menu
+scripts/pack-release.ps1      Build both release zips
+packaging/                    INSTALL.txt templates for zips
+.github/workflows/            CI + tag-triggered releases
 docs/                         Format notes and import guides
-tests/                        Unit tests (sample mods stay local / gitignored)
+tests/                        Unit tests (fixtures stay local / gitignored)
 third_party/oodle/            Bundled Oodle data DLL
+third_party/mmc-refs/         Local Frosty DLLs for plugin compile (gitignored)
 ```
-
 ## Documentation
 
 | Doc | Topic |

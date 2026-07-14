@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            8.0.x
+
+      - name: Ensure Oodle DLL
+        shell: pwsh
+        run: |
+          $dll = "third_party/oodle/bin/oodle-data-shared.dll"
+          if (Test-Path $dll) { exit 0 }
+          New-Item -ItemType Directory -Path "third_party/oodle/bin" -Force | Out-Null
+          $zip = "third_party/oodle/msvc-x64-release.zip"
+          Invoke-WebRequest -Uri "https://github.com/WorkingRobot/OodleUE/releases/download/2026-06-04-1357/msvc-x64-release.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "third_party/oodle/_extract" -Force
+          $found = Get-ChildItem "third_party/oodle/_extract" -Recurse -Filter "oodle-data-shared.dll" | Select-Object -First 1
+          if (-not $found) { throw "oodle-data-shared.dll not found" }
+          Copy-Item $found.FullName $dll -Force
+
+      - name: Test
+        run: dotnet test tests/FrostyConvert.Tests/FrostyConvert.Tests.csproj -c Release --nologo
+
+      - name: Publish CLI (smoke)
+        run: >
+          dotnet publish src/FrostyConvert.Cli/FrostyConvert.Cli.csproj
+          -c Release -r win-x64 --self-contained true
+          -o artifacts/cli-smoke

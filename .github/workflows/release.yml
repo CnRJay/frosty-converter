@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix (e.g. 1.0.0). Used only for workflow_dispatch."
+        required: false
+        default: "0.0.0-dev"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            8.0.x
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $v = "${{ github.ref_name }}".TrimStart("v")
+          } else {
+            $v = "${{ inputs.version }}"
+            if (-not $v) { $v = "0.0.0-dev" }
+          }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Version=$v"
+
+      - name: Ensure Oodle DLL
+        shell: pwsh
+        run: |
+          $dll = "third_party/oodle/bin/oodle-data-shared.dll"
+          if (Test-Path $dll) {
+            Write-Host "Oodle present: $dll"
+            exit 0
+          }
+          Write-Host "Downloading OodleUE msvc-x64-release..."
+          New-Item -ItemType Directory -Path "third_party/oodle" -Force | Out-Null
+          $zip = "third_party/oodle/msvc-x64-release.zip"
+          Invoke-WebRequest -Uri "https://github.com/WorkingRobot/OodleUE/releases/download/2026-06-04-1357/msvc-x64-release.zip" -OutFile $zip
+          # Extract only the data shared dll path structure
+          Expand-Archive -Path $zip -DestinationPath "third_party/oodle/_extract" -Force
+          $found = Get-ChildItem "third_party/oodle/_extract" -Recurse -Filter "oodle-data-shared.dll" | Select-Object -First 1
+          if (-not $found) { throw "oodle-data-shared.dll not found in OodleUE zip" }
+          New-Item -ItemType Directory -Path "third_party/oodle/bin" -Force | Out-Null
+          Copy-Item $found.FullName "third_party/oodle/bin/oodle-data-shared.dll" -Force
+          Write-Host "Installed $($found.FullName) -> third_party/oodle/bin/"
+
+      - name: Fetch Frosty reference assemblies (compile MMC plugin)
+        shell: pwsh
+        run: |
+          # Compile-time only. Not redistributed in the MMC plugin zip.
+          # Prefer MMC-compatible APIs; stock Frosty Editor DLLs are enough for this plugin.
+          $refs = "third_party/mmc-refs"
+          New-Item -ItemType Directory -Path $refs -Force | Out-Null
+          if ((Test-Path "$refs/FrostyCore.dll") -and (Test-Path "$refs/FrostySdk.dll") -and (Test-Path "$refs/FrostyControls.dll")) {
+            Write-Host "mmc-refs already present"
+            exit 0
+          }
+          $url = "https://github.com/CadeEvs/FrostyToolsuite/releases/download/v1.0.6.3/FrostyEditor.zip"
+          $zip = Join-Path $env:RUNNER_TEMP "FrostyEditor.zip"
+          Write-Host "Downloading $url"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          $extract = Join-Path $env:RUNNER_TEMP "FrostyEditor"
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $core = Get-ChildItem $extract -Recurse -Filter "FrostyCore.dll" | Select-Object -First 1
+          $sdk = Get-ChildItem $extract -Recurse -Filter "FrostySdk.dll" | Select-Object -First 1
+          $ctrl = Get-ChildItem $extract -Recurse -Filter "FrostyControls.dll" | Select-Object -First 1
+          if (-not $core -or -not $sdk -or -not $ctrl) {
+            throw "Could not locate FrostyCore/FrostySdk/FrostyControls in FrostyEditor.zip"
+          }
+          Copy-Item $core.FullName "$refs/FrostyCore.dll" -Force
+          Copy-Item $sdk.FullName "$refs/FrostySdk.dll" -Force
+          Copy-Item $ctrl.FullName "$refs/FrostyControls.dll" -Force
+          Write-Host "Installed compile refs from FrostyEditor v1.0.6.3"
+
+      - name: Test
+        run: dotnet test tests/FrostyConvert.Tests/FrostyConvert.Tests.csproj -c Release --nologo
+
+      - name: Pack release zips
+        shell: pwsh
+        run: |
+          ./scripts/pack-release.ps1 -Version "${{ steps.ver.outputs.version }}" -Configuration Release
+
+      - name: List artifacts
+        shell: pwsh
+        run: Get-ChildItem dist -Filter *.zip | Format-Table Name, Length
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/FrostyConvert-FifaTool-v${{ steps.ver.outputs.version }}-win-x64.zip
+            dist/FrostyConvert-MmcPlugin-v${{ steps.ver.outputs.version }}.zip
+          body: |
+            ## Downloads
+
+            | Package | Use for |
+            |---------|---------|
+            | **FrostyConvert-FifaTool-…-win-x64.zip** | FIFA / EA FC — convert `.fifamod` → `.fifaproject` (CLI) |
+            | **FrostyConvert-MmcPlugin-….zip** | College Football / Madden — MMC live `.fbmod` import |
+
+            ### FIFA tool
+            1. Unzip anywhere.
+            2. `fbmod2project.exe mod.fifamod -o recovered.fifaproject`
+            3. Open the project in FIFA Editor Tool with the game loaded.
+
+            ### MMC plugin
+            1. Close MMC Editor.
+            2. Copy `Plugins\*` into `<MMC Editor>\Plugins\`.
+            3. Copy `oodle-data-shared.dll` next to the MMC editor **exe**.
+            4. Restart MMC → load profile → **Tools → Import Frosty Mod (.fbmod)…**
+
+            See INSTALL.txt inside each zip and the repository README.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts (workflow_dispatch / always)
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrostyConvert-v${{ steps.ver.outputs.version }}
+          path: dist/*.zip
