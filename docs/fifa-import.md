@@ -1,16 +1,5 @@
 # FIFA Editor Tool recovery (`.fifamod` → `.fifaproject`)
 
-## Why this is not an MMC-style plugin
-
-| | **MMC (CFB/Madden)** | **FIFA Editor Tool** |
-|--|----------------------|----------------------|
-| Host | Frosty fork with `Plugins/` | Closed **single-file** .NET app |
-| Extension API | `RegisterMenuExtension` | **None** |
-| Live import | `FrostyConvert.MmcPlugin` → Tools → Import `.fbmod` | Not possible as a drop-in DLL |
-| Project format | `.fbproject` | `.fifaproject` (magic `FETP`) |
-
-FIFA Editor Tool can **export** `.fifamod` and the Mod Manager can **apply** them, but there is no public menu-extension surface like MMC.
-
 ## Workflow (same end state as MMC import)
 
 | MMC | FIFA Editor Tool + FrostyConvert |
