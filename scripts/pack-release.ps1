@@ -107,22 +107,8 @@ if (-not $SkipPlugin) {
     $pluginsDir = Join-Path $pluginStage "Plugins"
     New-Item -ItemType Directory -Path $pluginsDir -Force | Out-Null
 
-    $pluginFiles = @(
-        "FrostyConvert.MmcPlugin.dll",
-        "K4os.Compression.LZ4.dll",
-        "ZstdSharp.dll",
-        "System.Buffers.dll",
-        "System.Memory.dll",
-        "System.Numerics.Vectors.dll",
-        "System.Runtime.CompilerServices.Unsafe.dll",
-        "System.Threading.Tasks.Extensions.dll"
-    )
-    foreach ($f in $pluginFiles) {
-        $src = Join-Path $pluginBin $f
-        if (Test-Path $src) {
-            Copy-Item $src $pluginsDir -Force
-        }
-    }
+    # Costura merges managed deps into one DLL
+    Copy-Item $pluginDll $pluginsDir -Force
 
     Copy-Item $Oodle $pluginStage -Force
     Copy-Item (Join-Path $Root "packaging\MmcPlugin\INSTALL.txt") $pluginStage -Force

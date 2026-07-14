@@ -35,7 +35,7 @@ MMC’s project format is also **v17** (stock Frosty was often v14), with extra 
 ### From a GitHub Release (recommended)
 
 1. Download **`FrostyConvert-MmcPlugin-v*.zip`** from Releases.
-2. Close MMC. Copy `Plugins\*` → `<MMC Editor>\Plugins\`.
+2. Close MMC. Copy `Plugins\FrostyConvert.MmcPlugin.dll` → `<MMC Editor>\Plugins\`.
 3. Copy `oodle-data-shared.dll` next to the MMC editor **exe**.
 4. Start MMC → load profile → **Tools → Import Frosty Mod (.fbmod)…** → **File → Save As…**
 

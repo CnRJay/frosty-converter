@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Weavers xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="FodyWeavers.xsd">
+  <!-- Embed managed package deps into FrostyConvert.MmcPlugin.dll.
+       Frosty/MMC host assemblies are Private=false and must not be embedded. -->
+  <Costura
+    DisableCompression="false"
+    DisableCleanup="false"
+    LoadAtModuleInit="true"
+    IgnoreSatelliteAssemblies="true"
+    ExcludeAssemblies="FrostyCore|FrostySdk|FrostyControls|PresentationCore|PresentationFramework|WindowsBase|System.Windows.Forms" />
+</Weavers>

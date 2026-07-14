@@ -137,27 +137,15 @@ jobs:
           $stage = "dist/_staging/MmcPlugin"
           $plugins = Join-Path $stage "Plugins"
           New-Item -ItemType Directory -Path $plugins -Force | Out-Null
-          $files = @(
-            "FrostyConvert.MmcPlugin.dll",
-            "K4os.Compression.LZ4.dll",
-            "ZstdSharp.dll",
-            "System.Buffers.dll",
-            "System.Memory.dll",
-            "System.Numerics.Vectors.dll",
-            "System.Runtime.CompilerServices.Unsafe.dll",
-            "System.Threading.Tasks.Extensions.dll"
-          )
-          foreach ($f in $files) {
-            $src = Join-Path $pluginBin $f
-            if (Test-Path $src) { Copy-Item $src $plugins -Force; Write-Host "  + $f" }
-            else { Write-Host "  skip missing $f" }
-          }
+          # Costura embeds managed deps into the single plugin DLL
+          Copy-Item "$pluginBin/FrostyConvert.MmcPlugin.dll" $plugins -Force
           Copy-Item third_party/oodle/bin/oodle-data-shared.dll $stage -Force
           Copy-Item packaging/MmcPlugin/INSTALL.txt $stage -Force
           $zip = "dist/FrostyConvert-MmcPlugin-v$ver.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path "$stage/*" -DestinationPath $zip -Force
           Write-Host "Created $zip size=$((Get-Item $zip).Length)"
+          Get-ChildItem $stage -Recurse -File | ForEach-Object { Write-Host "  package: $($_.FullName.Substring((Resolve-Path $stage).Path.Length+1))" }
 
       - name: List artifacts
         shell: pwsh

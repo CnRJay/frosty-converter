@@ -50,6 +50,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
+    <!-- Embed LZ4/Zstd + net48 polyfills into FrostyConvert.MmcPlugin.dll (single plugin file). -->
+    <PackageReference Include="Costura.Fody" Version="5.7.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Fody" Version="6.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
   </ItemGroup>
@@ -82,20 +90,10 @@
   </ItemGroup>
 
   <Target Name="DeployToMmc" AfterTargets="Build" Condition="'$(SkipMmcDeploy)' != 'true' and '$(MmcEditorDir)' != '' and Exists('$(MmcEditorDir)\Plugins')">
-    <ItemGroup>
-      <_Deploy Include="$(TargetPath)" />
-      <_Deploy Include="$(TargetDir)K4os.Compression.LZ4.dll" Condition="Exists('$(TargetDir)K4os.Compression.LZ4.dll')" />
-      <_Deploy Include="$(TargetDir)ZstdSharp.dll" Condition="Exists('$(TargetDir)ZstdSharp.dll')" />
-      <_Deploy Include="$(TargetDir)System.Buffers.dll" Condition="Exists('$(TargetDir)System.Buffers.dll')" />
-      <_Deploy Include="$(TargetDir)System.Memory.dll" Condition="Exists('$(TargetDir)System.Memory.dll')" />
-      <_Deploy Include="$(TargetDir)System.Numerics.Vectors.dll" Condition="Exists('$(TargetDir)System.Numerics.Vectors.dll')" />
-      <_Deploy Include="$(TargetDir)System.Runtime.CompilerServices.Unsafe.dll" Condition="Exists('$(TargetDir)System.Runtime.CompilerServices.Unsafe.dll')" />
-      <_Deploy Include="$(TargetDir)System.Threading.Tasks.Extensions.dll" Condition="Exists('$(TargetDir)System.Threading.Tasks.Extensions.dll')" />
-    </ItemGroup>
-    <!-- ContinueOnError: editor locks the DLL while running -->
-    <Copy SourceFiles="@(_Deploy)" DestinationFolder="$(MmcEditorDir)\Plugins" SkipUnchangedFiles="true" ContinueOnError="WarnAndContinue" />
+    <!-- Single merged plugin DLL (Costura embeds managed deps). Oodle stays next to the editor exe. -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MmcEditorDir)\Plugins" SkipUnchangedFiles="true" ContinueOnError="WarnAndContinue" />
     <Copy SourceFiles="$(TargetDir)oodle-data-shared.dll" DestinationFolder="$(MmcEditorDir)" SkipUnchangedFiles="true" Condition="Exists('$(TargetDir)oodle-data-shared.dll')" ContinueOnError="WarnAndContinue" />
-    <Message Importance="high" Text="Deployed FrostyConvert.MmcPlugin → $(MmcEditorDir)\Plugins (close MMC first if copy was skipped)" />
+    <Message Importance="high" Text="Deployed FrostyConvert.MmcPlugin.dll → $(MmcEditorDir)\Plugins (close MMC first if copy was skipped)" />
   </Target>
 
 </Project>

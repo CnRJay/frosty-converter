@@ -31,10 +31,11 @@ Keep the `.exe` and `oodle-data-shared.dll` in the same folder.
 ### MMC plugin install
 
 1. Download **MmcPlugin** zip → close MMC Editor.
-2. Copy everything under `Plugins\` into `<MMC Editor>\Plugins\`.
+2. Copy `Plugins\FrostyConvert.MmcPlugin.dll` into `<MMC Editor>\Plugins\` (one DLL).
 3. Copy `oodle-data-shared.dll` next to the MMC **editor executable** (not into Plugins).
 4. Start MMC → load profile → **Tools → Import Frosty Mod (.fbmod)…** → **File → Save As…** project.
 
+Managed dependencies (LZ4, Zstd, etc.) are embedded in the plugin DLL. Only Oodle stays as a separate native DLL.
 Each zip includes an `INSTALL.txt` with the same steps.
 
 ## Requirements
