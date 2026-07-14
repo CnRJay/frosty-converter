@@ -106,6 +106,35 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
         App.Logger.Log("FrostyConvert import: ok={0} fail={1} file={2}", ok, fail, Path.GetFileName(path));
     });
 
+    /// <summary>
+    /// MMC exposes <c>App.FileSystemManager</c>; stock Frosty uses <c>App.FileSystem</c>.
+    /// Resolve at runtime so the plugin compiles against either reference set.
+    /// </summary>
+    private static object GetFileSystem()
+    {
+        Type appType = typeof(App);
+        foreach (string name in new[] { "FileSystemManager", "FileSystem" })
+        {
+            PropertyInfo? prop = appType.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+            if (prop != null)
+            {
+                object? value = prop.GetValue(null);
+                if (value != null)
+                    return value;
+            }
+
+            FieldInfo? field = appType.GetField(name, BindingFlags.Public | BindingFlags.Static);
+            if (field != null)
+            {
+                object? value = field.GetValue(null);
+                if (value != null)
+                    return value;
+            }
+        }
+
+        throw new InvalidOperationException("App.FileSystemManager / App.FileSystem not found on this editor build.");
+    }
+
     private static bool ImportEbx(FbmodResource resource, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(resource.Name))
@@ -146,6 +175,7 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
             return false;
         }
 
+        object fileSystem = GetFileSystem();
         Exception? lastError = null;
 
         // Try official factory first (picks Riff / RiffPGA / V2 based on EbxVersion).
@@ -154,9 +184,7 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
             try
             {
                 using var ms = new MemoryStream(data);
-                EbxReader reader = useProjectFactory
-                    ? EbxReader.CreateProjectReader(ms, App.FileSystemManager, false, true)
-                    : EbxReader.CreateReader(ms, App.FileSystemManager, false);
+                EbxReader reader = CreateEbxReader(ms, fileSystem, useProjectFactory);
 
                 if (TryReadAndApply(resource.Name, reader, out string? detail))
                     return true;
@@ -181,8 +209,8 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
                 if (t == null) continue;
 
                 using var ms = new MemoryStream(data);
-                // ctor(Stream, FileSystemManager, bool patched)
-                object? inst = Activator.CreateInstance(t, ms, App.FileSystemManager, false);
+                // ctor(Stream, FileSystemManager/FileSystem, bool patched)
+                object? inst = Activator.CreateInstance(t, ms, fileSystem, false);
                 if (inst is not EbxReader reader) continue;
 
                 if (TryReadAndApply(resource.Name, reader, out string? detail))
@@ -204,6 +232,39 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
             $"Ebx '{resource.Name}': failed to parse (magic={magic}, len={data.Length}, " +
             $"EbxVersion={ProfilesLibrary.EbxVersion}): {err}");
         return false;
+    }
+
+    private static EbxReader CreateEbxReader(MemoryStream ms, object fileSystem, bool projectReader)
+    {
+        // Call CreateProjectReader/CreateReader via reflection so argument type matches MMC or stock Frosty.
+        string methodName = projectReader ? "CreateProjectReader" : "CreateReader";
+        MethodInfo[] methods = typeof(EbxReader).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Where(m => m.Name == methodName)
+            .ToArray();
+
+        foreach (MethodInfo method in methods)
+        {
+            ParameterInfo[] ps = method.GetParameters();
+            try
+            {
+                object? result = null;
+                if (projectReader && ps.Length >= 4)
+                    result = method.Invoke(null, new object[] { ms, fileSystem, false, true });
+                else if (!projectReader && ps.Length >= 3)
+                    result = method.Invoke(null, new object[] { ms, fileSystem, false });
+                else if (ps.Length >= 2)
+                    result = method.Invoke(null, new object[] { ms, fileSystem });
+
+                if (result is EbxReader reader)
+                    return reader;
+            }
+            catch (TargetInvocationException)
+            {
+                // try next overload
+            }
+        }
+
+        throw new MissingMethodException($"EbxReader.{methodName} not found for this editor build.");
     }
 
     private static bool TryReadAndApply(string name, EbxReader reader, out string? detail)
