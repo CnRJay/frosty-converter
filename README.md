@@ -1,134 +1,132 @@
 # FrostyConvert
 
-Recover editable Frosty **`.fbproject`** files from compiled **`.fbmod`** mods.
+Recover **editable editor projects** from compiled Frostbite mods when the original project is gone.
 
-When a mod author disappears and only the shipped `.fbmod` remains, this tool aims to rebuild a project you can open in Frosty Editor (or compatible forks) and continue development after game patches.
+| Input | Output | How you edit |
+|-------|--------|--------------|
+| **`.fbmod`** (Frosty / MMC) | Live import into MMC, then **`.fbproject`** | MMC Editor plugin (CFB / Madden) |
+| **`.fifamod`** (FIFA Editor Tool) | **`.fifaproject`** | Open in FIFA Editor Tool with the game loaded |
 
-> **Status:** Working for **MMC live `.fbmod` import** (CFB/Madden) and **`.fifamod` → `.fifaproject`** (FIFA Editor Tool).
+Both paths decompress CAS/Oodle payloads and rebuild projects you can keep maintaining after game updates.
 
-## Why this exists
+## Requirements
 
-- `.fbproject` = editor project (full editable state)
-- `.fbmod` = compiled mod for Frosty Mod Manager (lossy export)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) (CLI and tests)
+- .NET Framework 4.8 (MMC plugin only)
+- Oodle data DLL (bundled as `third_party/oodle/bin/oodle-data-shared.dll`)
 
-Export is not perfectly reversible (e.g. transient-only ebx edits are dropped), but enough data remains to reconstruct a **workable** project for maintenance.
-
-## Quick start
+## Build
 
 ```bash
 dotnet build FrostyConvert.slnx
+dotnet test tests/FrostyConvert.Tests
+```
+
+CLI entry project: `src/FrostyConvert.Cli` (assembly name `fbmod2project`).
+
+## CLI
+
+```bash
+# Inventory a mod (no game install)
 dotnet run --project src/FrostyConvert.Cli -- path/to/mod.fbmod --inspect
-```
+dotnet run --project src/FrostyConvert.Cli -- path/to/mod.fifamod --inspect
 
-### Inspect (no game install)
+# JSON report + raw payload dump
+dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect --json --report report.json --extract ./payloads
 
-```bash
-# Human-readable inventory
-dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect
-
-# JSON report
-dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect --json --report report.json
-
-# Dump raw resource payloads
-dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect --extract ./out-payloads
-```
-
-### Convert offline (no game install)
-
-```bash
+# Offline convert
 dotnet run --project src/FrostyConvert.Cli -- mod.fbmod -o recovered.fbproject
+dotnet run --project src/FrostyConvert.Cli -- mod.fifamod -o recovered.fifaproject
+
+# Optional Oodle override
+dotnet run --project src/FrostyConvert.Cli -- mod.fbmod --inspect --oodle path/to/oodle-data-shared.dll
 ```
 
-**What you get:** a `.fbproject` with mod metadata + decompressed assets. Useful for inventory / salvage.
+| Flag | Meaning |
+|------|---------|
+| `--inspect` | Parse and print resource inventory |
+| `-o` / `--output` | Write `.fbproject` or `.fifaproject` |
+| `--json` | JSON report text |
+| `--report <path>` | Write JSON report to a file |
+| `--extract <dir>` | Dump resource payloads |
+| `--oodle <path>` | Override Oodle DLL |
+| `--inspect-project` | Summarize a recovered `.fbproject` |
 
-**CFB / Madden MMC limitation:** gameplay EBX is **RIFF** (`EBXD`/`EFIX`/`EBXX`). Offline projects can **open** but **crash the property grid** when you click an asset (`Index was out of range`). Do **not** use offline `.fbproject` for editing those titles.
+## Workflow: College Football / Madden (`.fbmod`)
 
-### Recover for editing (MMC Editor plugin) — recommended for CFB27
+CFB/Madden gameplay EBX is **RIFF**. Offline `.fbproject` files may open in the asset list but **crash the property grid**. Prefer live import.
+
+1. Build the plugin:
+   ```bash
+   dotnet build src/FrostyConvert.MmcPlugin
+   ```
+   On success it copies into your MMC `Plugins` folder (set `MmcEditorDir` on the project if needed).
+
+2. Restart **MMC Editor**, load the game profile (e.g. CollegeFB27).
+
+3. **Tools → Import Frosty Mod (.fbmod)…**
+
+4. **File → Save As…** a new `.fbproject` so MMC re-serializes assets correctly.
+
+Details: [docs/mmc-import.md](docs/mmc-import.md).
+
+## Workflow: EA FC / FIFA (`.fifamod`)
+
+FIFA Editor Tool is a closed single-file app with **no plugin API**. Convert offline, then open the project in the editor:
 
 ```bash
-dotnet build src/FrostyConvert.MmcPlugin/FrostyConvert.MmcPlugin.csproj
+dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
 ```
 
-This deploys `FrostyConvert.MmcPlugin.dll` into your MMC `Plugins` folder (default path in the csproj: `d:\cfb27 mods\MMC_Editor_v1.1.0.0`).
+1. Launch **FIFA Editor Tool** and load the matching game (e.g. FC26).
+2. **File → Open Project** → `recovered.fifaproject`.
+3. Edit assets, then save / re-export a mod.
 
-Then in **MMC Editor**:
-
-1. **Close and restart MMC** after building (plugin DLLs are locked while the editor runs)  
-2. Load the **CollegeFB27** (or matching) game profile  
-3. **Tools → Import Frosty Mod (.fbmod)…**  
-4. Select the abandoned `.fbmod`  
-5. **File → Save As…** a new `.fbproject` (MMC re-serializes EBX correctly)
-
-The plugin applies assets through the live `AssetManager` + `EbxReaderRiff`, so the property grid works.
-
-### Oodle
-
-`oo2core_*.dll` is **proprietary** (RAD/Epic). What we ship natively is:
-
-- **`oodle-data-shared.dll`** — Unreal Engine Oodle *data* library build from [WorkingRobot/OodleUE](https://github.com/WorkingRobot/OodleUE) (see `third_party/oodle/`)
-- **OozSharp** — pure managed Kraken reimplementation as a limited fallback
-
-You do **not** need to hunt for `oo2core` for typical CFB/Madden mods.
-
-### Convert with game path (planned)
-
-```text
-fbmod2project mod.fbmod -g "C:\Games\..." -o recovered.fbproject
-```
-
-Will resolve bundle names and improve handler fidelity via Frosty SDK.
-
-## Repo layout
-
-```text
-src/FrostyConvert.Core/      # Format parsers + converters
-src/FrostyConvert.Cli/      # fbmod2project CLI
-src/FrostyConvert.MmcPlugin # MMC Editor import menu
-docs/                        # Format notes + import guides
-tests/                       # Unit tests (fixtures stay local / gitignored)
-third_party/oodle/           # oodle-data-shared.dll (see third_party/oodle/README.md)
-FrostyToolsuite/             # Optional local reference clone (not required to build)
-```
-
-## Roadmap
-
-| Phase | Deliverable |
-|-------|-------------|
-| **1** | Binary `.fbmod` inspect + offline `.fbproject` + MMC live import plugin |
-| **2** | `.fifamod` inspect + `.fifaproject` recovery for FIFA Editor Tool |
-| Later | Game-assisted bundle resolve, legacy `.archive`, handlers |
-
-### Recover a `.fifamod` for FIFA Editor Tool
-
-FET is a closed single-file app (no `Plugins/` folder), so import cannot mirror the MMC DLL. Convert then open:
-
-```text
-fbmod2project "mod.fifamod" --inspect
-fbmod2project "mod.fifamod" -o recovered.fifaproject
-```
-
-Then in FIFA Editor Tool: load FC26 → File → Open Project → `recovered.fifaproject`.  
 Details: [docs/fifa-import.md](docs/fifa-import.md).
+
+## Oodle
+
+Frostbite mods commonly use Oodle. This repo uses:
+
+- **`oodle-data-shared.dll`** — Oodle *data* library from [WorkingRobot/OodleUE](https://github.com/WorkingRobot/OodleUE) builds (see `third_party/oodle/`)
+- **OozSharp** — managed Kraken fallback for some streams only
+
+You do not need a game `oo2core_*.dll` for typical CFB/Madden or FC26 mods.
+
+## Repository layout
+
+```text
+src/FrostyConvert.Core/       Shared parsers and converters
+src/FrostyConvert.Cli/       Command-line tool
+src/FrostyConvert.MmcPlugin/ MMC Editor import menu
+docs/                         Format notes and import guides
+tests/                        Unit tests (sample mods stay local / gitignored)
+third_party/oodle/            Bundled Oodle data DLL
+```
+
+## Documentation
+
+| Doc | Topic |
+|-----|--------|
+| [docs/formats/fbmod.md](docs/formats/fbmod.md) | Frosty `.fbmod` |
+| [docs/formats/fbproject.md](docs/formats/fbproject.md) | Frosty `.fbproject` |
+| [docs/formats/fifamod.md](docs/formats/fifamod.md) | FIFA Editor Tool `.fifamod` |
+| [docs/mmc-import.md](docs/mmc-import.md) | MMC live import |
+| [docs/fifa-import.md](docs/fifa-import.md) | FIFA project recovery |
 
 ## Samples
 
-Place real abandoned mods under `tests/fixtures/` (gitignored). See `tests/fixtures/README.md`.
-
-## Format reference
-
-- [docs/formats/fbmod.md](docs/formats/fbmod.md)
-- [docs/formats/fbproject.md](docs/formats/fbproject.md)
-- [docs/formats/fifamod.md](docs/formats/fifamod.md)
-
-Upstream reference source: [CadeEvs/FrostyToolsuite](https://github.com/CadeEvs/FrostyToolsuite) (vendored under `FrostyToolsuite/` for research).
+Put real mods under `tests/fixtures/` for local testing. That folder is gitignored so third-party content is not published. See [tests/fixtures/README.md](tests/fixtures/README.md).
 
 ## Ethics
 
-- Preserve original **author / title / version** from mod metadata in recovered projects.
+- Preserve original **title / author / version** from mod metadata in recovered projects.
 - Intended for **abandoned** mods and community maintenance, not for stripping credit from active authors.
 
 ## License
 
-Tool code in this repository: TBD (to be set by the project owner).
+Tool code in this repository: **TBD** (set by the project owner before release).
 
-Frosty Toolsuite itself is licensed under **CC BY-NC-ND 4.0** — do not redistribute modified Frosty sources as a derivative product. This project reimplements format parsers from public structure and will call into stock Frosty assemblies for full conversion where needed.
+Format knowledge draws on public Frosty Toolsuite structure ([CadeEvs/FrostyToolsuite](https://github.com/CadeEvs/FrostyToolsuite), CC BY-NC-ND 4.0). This project reimplements standalone parsers and does not redistribute modified Frosty sources.
+
+Oodle is a product of RAD Game Tools / Epic. Use of `oodle-data-shared.dll` follows Epic’s Unreal Engine / OodleUE terms — see `third_party/oodle/README.md`.
