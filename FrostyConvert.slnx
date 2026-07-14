@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FrostyConvert.Cli/FrostyConvert.Cli.csproj" />
+    <Project Path="src/FrostyConvert.Core/FrostyConvert.Core.csproj" />
+    <Project Path="src/FrostyConvert.MmcPlugin/FrostyConvert.MmcPlugin.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FrostyConvert.Tests/FrostyConvert.Tests.csproj" />
+  </Folder>
+</Solution>

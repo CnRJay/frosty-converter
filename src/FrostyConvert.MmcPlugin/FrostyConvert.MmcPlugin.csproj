@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>FrostyConvert.MmcPlugin</AssemblyName>
+    <RootNamespace>FrostyConvert.MmcPlugin</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <MmcEditorDir Condition="'$(MmcEditorDir)' == ''">d:\cfb27 mods\MMC_Editor_v1.1.0.0</MmcEditorDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\FrostyConvert.Core\IO\EndianBinaryReader.cs" Link="Core\EndianBinaryReader.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\FbmodConstants.cs" Link="Core\FbmodConstants.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\FbmodDetails.cs" Link="Core\FbmodDetails.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\FbmodFile.cs" Link="Core\FbmodFile.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\FbmodReader.cs" Link="Core\FbmodReader.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\FbmodResource.cs" Link="Core\FbmodResource.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\ModResourceType.cs" Link="Core\ModResourceType.cs" />
+  </ItemGroup>
+
+  <!-- Global usings for linked Core files that assume modern implicit usings -->
+  <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Text" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PolySharp" Version="1.14.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="FrostyCore">
+      <HintPath>$(MmcEditorDir)\FrostyCore.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="FrostySdk">
+      <HintPath>$(MmcEditorDir)\FrostySdk.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="FrostyControls">
+      <HintPath>$(MmcEditorDir)\FrostyControls.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\third_party\oodle\bin\oodle-data-shared.dll" Condition="Exists('..\..\third_party\oodle\bin\oodle-data-shared.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>oodle-data-shared.dll</Link>
+    </None>
+  </ItemGroup>
+
+  <Target Name="DeployToMmc" AfterTargets="Build" Condition="Exists('$(MmcEditorDir)\Plugins')">
+    <ItemGroup>
+      <_Deploy Include="$(TargetPath)" />
+      <_Deploy Include="$(TargetDir)K4os.Compression.LZ4.dll" Condition="Exists('$(TargetDir)K4os.Compression.LZ4.dll')" />
+      <_Deploy Include="$(TargetDir)ZstdSharp.dll" Condition="Exists('$(TargetDir)ZstdSharp.dll')" />
+    </ItemGroup>
+    <!-- ContinueOnError: editor locks the DLL while running -->
+    <Copy SourceFiles="@(_Deploy)" DestinationFolder="$(MmcEditorDir)\Plugins" SkipUnchangedFiles="true" ContinueOnError="WarnAndContinue" />
+    <Copy SourceFiles="$(TargetDir)oodle-data-shared.dll" DestinationFolder="$(MmcEditorDir)" SkipUnchangedFiles="true" Condition="Exists('$(TargetDir)oodle-data-shared.dll')" ContinueOnError="WarnAndContinue" />
+    <Message Importance="high" Text="Deployed FrostyConvert.MmcPlugin → $(MmcEditorDir)\Plugins (close MMC first if copy was skipped)" />
+  </Target>
+
+</Project>
