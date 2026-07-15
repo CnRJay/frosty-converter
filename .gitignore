@@ -24,7 +24,7 @@ artifacts/
 *.swp
 *~
 
-## Local code intelligence index (Grok / Codegraph — never commit)
+## Local code intelligence index
 .codegraph/
 
 ## OS
@@ -73,5 +73,3 @@ artifacts/
 report.json
 *.bak
 /FrostyToolsuite
-
-/.codegraph
