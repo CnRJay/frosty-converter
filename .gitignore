@@ -24,6 +24,9 @@ artifacts/
 *.swp
 *~
 
+## Local code intelligence index (Grok / Codegraph — never commit)
+.codegraph/
+
 ## OS
 Thumbs.db
 Desktop.ini
