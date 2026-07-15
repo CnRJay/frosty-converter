@@ -62,9 +62,6 @@ third_party/mmc-refs/*.dll
 dist/
 artifacts/
 
-## Vendored Frosty reference clone (large; optional local only)
-## Uncomment the next line if you do not want FrostyToolsuite on GitHub:
-# FrostyToolsuite/
 
 ## Recovered projects / reports
 *.fifaproject
