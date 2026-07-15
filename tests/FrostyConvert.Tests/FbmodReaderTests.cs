@@ -178,6 +178,76 @@ public class FbmodReaderTests
     }
 
     [Fact]
+    public void Read_CollegeFbV7Chunk_ParsesH64AndSuperBundles()
+    {
+        // Hand-build a minimal v7 CollegeFB27 mod with one chunk matching MMC ChunkResource.Read.
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            w.Write(FbmodConstants.BinaryMagic);
+            w.Write(7u);
+            long dataOffsetPos = ms.Position;
+            w.Write(0L);
+            w.Write(0);
+            w.Write("CollegeFB27"); // BinaryWriter length-prefixed string
+            w.Write(4298863);
+
+            void Nt(string s)
+            {
+                w.Write(System.Text.Encoding.UTF8.GetBytes(s));
+                w.Write((byte)0);
+            }
+            Nt("T"); Nt("A"); Nt("C"); Nt("1"); Nt("D"); Nt(""); // details + link
+
+            w.Write(1); // resource count
+            w.Write((byte)ModResourceType.Chunk);
+            w.Write(0); // resourceIndex
+            Nt("00112233-4455-6677-8899-aabbccddeeff");
+            w.Write(new byte[20]); // sha1
+            w.Write(3L); // size
+            w.Write((byte)0); // flags
+            w.Write(0); // handlerHash
+            Nt(""); // userData
+            w.Write(0); // added bundles
+            w.Write(1u); // rangeStart
+            w.Write(2u); // rangeEnd
+            w.Write(3u); // logicalOffset
+            w.Write(4u); // logicalSize
+            w.Write(0x11111111); // h32
+            w.Write(0x2222222233333333L); // h64 (v7 CFB, no handler)
+            w.Write(5); // firstMip
+            w.Write(2); // superBundles count
+            w.Write(unchecked((int)0xAABBCCDD));
+            w.Write(unchecked((int)0x11223344));
+
+            long dataOffset = ms.Position;
+            w.Write(0L); // payload offset
+            w.Write(3L); // payload size
+            w.Write(new byte[] { 9, 8, 7 });
+
+            long end = ms.Position;
+            ms.Position = dataOffsetPos;
+            w.Write(dataOffset);
+            w.Write(1);
+            ms.Position = end;
+        }
+
+        ms.Position = 0;
+        var mod = FbmodReader.Read(ms, "v7.fbmod", loadResourceData: true);
+        Assert.Equal(7u, mod.Version);
+        Assert.Equal("CollegeFB27", mod.ProfileName);
+        var chunk = Assert.Single(mod.Resources);
+        Assert.Equal(ModResourceType.Chunk, chunk.Type);
+        Assert.Equal(1u, chunk.RangeStart);
+        Assert.Equal(0x11111111, chunk.H32);
+        Assert.Equal(0x2222222233333333L, chunk.H64);
+        Assert.Equal(5, chunk.FirstMip);
+        Assert.Equal(2, chunk.SuperBundlesToAdd.Count);
+        Assert.Equal(unchecked((int)0xAABBCCDD), chunk.SuperBundlesToAdd[0]);
+        Assert.Equal(new byte[] { 9, 8, 7 }, chunk.Data);
+    }
+
+    [Fact]
     public void IsBinaryFbmod_OnSynthetic_ReturnsTrue()
     {
         byte[] bytes = FbmodWriterHelper.BuildMinimalV5(

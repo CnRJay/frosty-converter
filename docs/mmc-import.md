@@ -59,10 +59,15 @@ dotnet build src/FrostyConvert.MmcPlugin -p:MmcEditorDir="C:\path\to\MMC_Editor"
 Or pack a release-style zip locally: `.\scripts\pack-release.ps1`
 ## What the plugin does
 
-1. Parses binary `.fbmod` (v1–v7 resource table)
-2. Decompresses CAS / Oodle payloads
+1. Parses binary `.fbmod` (v1–v7 resource table), including **MMC CollegeFB27/Madden27** chunk fields (`h64` when `v≥7` and no handler; superBundles when `v>5`)
+2. Decompresses CAS / Oodle payloads before `ModifyRes` / `ModifyChunk` (Texture.Read needs raw RES bytes)
 3. Applies assets via live `AssetManager` (`ModifyEbx` / res / chunk) using `EbxReaderRiff` / factory readers
-4. Leaves you free to edit and save a native MMC project
+4. For **Res+Chunk texture mods** (no EBX in the mod), links each modified Res to its same-name TextureAsset EBX so **Data Explorer → Show Modified** lists them
+5. Leaves you free to edit and save a native MMC project
+
+### Texture-only mods (e.g. coach portraits)
+
+Many cosmetic mods ship **281 Res + 281 chunks** and **0 EBX**. Import still succeeds; after linking you should see hundreds of TextureAssets under Modified. Always **File → Save As…** a new `.fbproject` after import.
 
 ## Related MMC / FrostySdk types
 

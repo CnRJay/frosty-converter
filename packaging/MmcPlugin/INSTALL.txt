@@ -39,6 +39,8 @@ Notes
 -----
 - Do not use offline .fbproject conversion alone for CFB/Madden RIFF EBX —
   the property grid needs live import (this plugin).
+- Texture-only .fbmods (Res+Chunk, no EBX) still import; TextureAssets appear
+  under Data Explorer "Show Modified" after the plugin links them.
 - If the menu item is missing, confirm the plugin DLL is under Plugins\
   and that you restarted MMC after installing.
 - Old installs: you can delete leftover dependency DLLs in Plugins\

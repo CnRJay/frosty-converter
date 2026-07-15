@@ -7,11 +7,6 @@ namespace FrostyConvert.Core.Project;
 /// Writes a FIFA Editor Tool v2 <c>.fifaproject</c> from a parsed <see cref="FifamodFile"/>.
 /// Layout matches <c>Fifa_Tool.EditorProject.Save</c> (magic FETP).
 /// </summary>
-/// <remarks>
-/// FIFA Editor Tool has no Frosty-style plugin API. The recovery path is:
-/// convert <c>.fifamod</c> → <c>.fifaproject</c>, then open the project in FET with the game loaded
-/// (same end state as MMC Tools → Import fbmod → Save project).
-/// </remarks>
 public static class FifaprojectWriter
 {
     public const uint MagicLe = 0x50544546; // 'FETP'
@@ -19,28 +14,119 @@ public static class FifaprojectWriter
 
     /// <summary>
     /// FET <c>CompressionLevel</c> enum (Sdk): Invalid=0, Fastest=1, …, None=8.
-    /// Stored payloads use CAS codec headers; level is metadata for re-save.
     /// </summary>
     public const byte CompressionLevelFastest = 1;
 
-    public static void Write(string path, FifamodFile mod)
+    // Project-side chunk flags (same bits as mod ChunkFlags for fields we write).
+    private const ushort ProjChunkIsAdded = 1;
+    private const ushort ProjChunkIsLegacy = 2;
+    private const ushort ProjChunkAddToSuperBundle = 4;
+    private const ushort ProjChunkHasLogicalOffset = 8;
+    private const ushort ProjChunkHasLogicalSize = 0x10;
+    private const ushort ProjChunkHasH32 = 0x20;
+    private const ushort ProjChunkIsLegacyAdded = 0x40;
+    private const ushort ProjChunkHasAddedBundles = 0x80;
+    private const ushort ProjChunkBundleAssignmentOnly = 0x100;
+
+    public static void Write(string path, FifamodFile mod, IEnumerable<FifamodResource>? extraResources = null)
     {
         string? dir = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
         using var fs = File.Create(path);
-        Write(fs, mod);
+        Write(fs, mod, extraResources);
     }
 
-    public static void Write(Stream stream, FifamodFile mod)
+    public static void Write(Stream stream, FifamodFile mod, IEnumerable<FifamodResource>? extraResources = null)
     {
         using var w = new EndianBinaryWriter(stream, leaveOpen: true);
 
-        // --- Header (EditorProject.WriteHeader) ---
+        WriteHeader(w, mod);
+
+        // Added bundles (not tracked offline)
+        WriteUInt24(w, 0);
+
+        bool h32IsU64 = mod.GameName.StartsWith("FC26", StringComparison.OrdinalIgnoreCase)
+                        || mod.GameName.StartsWith("FC 26", StringComparison.OrdinalIgnoreCase)
+                        || mod.GameName.Contains("26", StringComparison.Ordinal);
+
+        IReadOnlyList<FifamodResource> all = extraResources is null
+            ? mod.Resources
+            : mod.Resources.Concat(extraResources).ToList();
+
+        // --- Chunks ---
+        var chunks = all
+            .Where(r => r.Kind == FifamodResourceKind.Chunk && ProjectPayload(r).Length > 0)
+            .ToList();
+        long posChunks = stream.Position;
+        WriteUInt24(w, 0);
+        int chunksWritten = 0;
+        foreach (var c in chunks)
+        {
+            byte[] payload = ProjectPayload(c);
+            WriteChunkEntry(w, mod, c, payload, h32IsU64);
+            chunksWritten++;
+        }
+        long afterChunks = stream.Position;
+        stream.Position = posChunks;
+        WriteUInt24(w, (uint)chunksWritten);
+        stream.Position = afterChunks;
+
+        // --- Res ---
+        var resList = all
+            .Where(r => r.Kind == FifamodResourceKind.Res && ProjectPayload(r).Length > 0)
+            .ToList();
+        long posRes = stream.Position;
+        WriteUInt24(w, 0);
+        int resWritten = 0;
+        foreach (var r in resList)
+        {
+            WriteResEntry(w, mod, r, ProjectPayload(r));
+            resWritten++;
+        }
+        long afterRes = stream.Position;
+        stream.Position = posRes;
+        WriteUInt24(w, (uint)resWritten);
+        stream.Position = afterRes;
+
+        // --- EBX ---
+        var ebxList = all
+            .Where(r => r.Kind == FifamodResourceKind.Ebx && ProjectPayload(r).Length > 0)
+            .ToList();
+        long posEbx = stream.Position;
+        WriteUInt24(w, 0);
+        int ebxWritten = 0;
+        foreach (var e in ebxList)
+        {
+            WriteEbxEntry(w, mod, e, ProjectPayload(e));
+            ebxWritten++;
+        }
+        long afterEbx = stream.Position;
+        stream.Position = posEbx;
+        WriteUInt24(w, (uint)ebxWritten);
+        stream.Position = afterEbx;
+    }
+
+    /// <summary>Counts written by <see cref="Write"/> for CLI reporting.</summary>
+    public static (int Chunks, int Res, int Ebx) CountWritable(
+        FifamodFile mod,
+        IEnumerable<FifamodResource>? extraResources = null)
+    {
+        IEnumerable<FifamodResource> all = extraResources is null
+            ? mod.Resources
+            : mod.Resources.Concat(extraResources);
+        int chunks = all.Count(r => r.Kind == FifamodResourceKind.Chunk && ProjectPayload(r).Length > 0);
+        int res = all.Count(r => r.Kind == FifamodResourceKind.Res && ProjectPayload(r).Length > 0);
+        int ebx = all.Count(r => r.Kind == FifamodResourceKind.Ebx && ProjectPayload(r).Length > 0);
+        return (chunks, res, ebx);
+    }
+
+    private static void WriteHeader(EndianBinaryWriter w, FifamodFile mod)
+    {
         w.WriteUInt32(MagicLe);
         w.WriteByte(ProjectVersion);
-        w.WriteByte(0); // tool major (FrostyConvert recovery)
+        w.WriteByte(0); // tool major
         w.WriteByte(1);
         w.WriteByte(0);
         w.WriteByte(0);
@@ -84,106 +170,185 @@ public static class FifaprojectWriter
         w.Write7BitEncodedInt(0); // initfs
         w.Write7BitEncodedInt(0); // player lua
         w.Write7BitEncodedInt(0); // player kit lua
+    }
 
-        // --- Added bundles ---
-        WriteUInt24(w, 0);
+    private static void WriteChunkEntry(
+        EndianBinaryWriter w,
+        FifamodFile mod,
+        FifamodResource c,
+        byte[] payload,
+        bool h32IsU64)
+    {
+        w.WriteGuid(c.ChunkId);
 
-        // --- Chunks (skip for now; gameplay mods are EBX-only) ---
-        WriteUInt24(w, 0);
-
-        // --- Res ---
-        // FET AssetManager.GetEbx/GetRes always runs Decompression.Decompress on ModifiedEntry.Data,
-        // which requires a CAS codec header (guard bits == 7). Store the mod's compressed CAS blob.
-        var resList = mod.Resources
-            .Where(r => r.Kind == FifamodResourceKind.Res && ProjectPayload(r).Length > 0)
-            .ToList();
-        long posRes = stream.Position;
-        WriteUInt24(w, 0);
-        int resWritten = 0;
-        foreach (var r in resList)
+        ushort flags = 0;
+        bool isAdded = c.IsAdded;
+        if (isAdded)
+            flags |= ProjChunkIsAdded;
+        if (c.LogicalOffset != 0)
+            flags |= ProjChunkHasLogicalOffset;
+        if (c.LogicalSize != 0)
+            flags |= ProjChunkHasLogicalSize;
+        if (c.H32 != 0)
+            flags |= ProjChunkHasH32;
+        if (c.ChunkFlags.HasFlag(FifamodChunkFlags.IsLegacy) || !string.IsNullOrEmpty(c.LegacyFileName))
         {
-            byte[] payload = ProjectPayload(r);
-            int originalSize = r.UncompressedSize > 0 ? r.UncompressedSize : payload.Length;
-            w.WriteLengthPrefixedString(r.Name);
-            var flags = FifamodResFlags.IsDirectlyModified;
+            flags |= ProjChunkIsLegacy;
+            if (c.ChunkFlags.HasFlag(FifamodChunkFlags.IsLegacyAdded))
+                flags |= ProjChunkIsLegacyAdded;
+        }
+        if (c.AddedBundleHashes.Length > 0)
+            flags |= ProjChunkHasAddedBundles;
+        if (c.BundleAssignmentOnly)
+            flags |= ProjChunkBundleAssignmentOnly;
+        if (isAdded && c.SuperBundleHash != 0)
+            flags |= ProjChunkAddToSuperBundle;
+
+        w.WriteUInt16(flags);
+        w.WriteBytes(PadSha1(c.Sha1 is { Length: 20 } ? c.Sha1 : System.Security.Cryptography.SHA1.HashData(payload)));
+
+        if (c.LogicalOffset != 0)
+            w.Write7BitEncodedInt(c.LogicalOffset);
+        if (c.LogicalSize != 0)
+            w.Write7BitEncodedInt(c.LogicalSize);
+        if (c.H32 != 0)
+        {
+            if (h32IsU64)
+                w.Write(c.H32);
+            else
+                w.WriteUInt32((uint)c.H32);
+        }
+
+        w.Write7BitEncodedInt(payload.Length);
+
+        if ((flags & ProjChunkIsLegacy) != 0)
+        {
+            w.Write(c.LegacyFileNameHash);
+            if ((flags & ProjChunkIsLegacyAdded) != 0)
+                w.WriteLengthPrefixedString(c.LegacyFileName ?? "");
+        }
+
+        WriteUInt24(w, mod.GameVersion);
+        if (!isAdded)
+            w.WriteBytes(new byte[20]); // AssetSha1AtImport unknown offline
+
+        if (c.AddedBundleHashes.Length > 0)
+        {
+            w.Write7BitEncodedInt(c.AddedBundleHashes.Length);
+            foreach (ulong h in c.AddedBundleHashes)
+                w.Write(h);
+        }
+
+        if (isAdded && c.SuperBundleHash != 0)
+            w.WriteUInt32(c.SuperBundleHash);
+
+        w.WriteByte(CompressionLevelFastest);
+        w.WriteBytes(payload);
+    }
+
+    private static void WriteResEntry(EndianBinaryWriter w, FifamodFile mod, FifamodResource r, byte[] payload)
+    {
+        int originalSize = r.UncompressedSize > 0 ? r.UncompressedSize : payload.Length;
+        bool isAdded = r.IsAdded;
+
+        w.WriteLengthPrefixedString(r.Name);
+        var flags = FifamodResFlags.IsDirectlyModified;
+        if (isAdded)
+            flags |= FifamodResFlags.IsAdded;
+        if (r.ResMeta is { Length: > 0 } || isAdded)
+            flags |= FifamodResFlags.HasMeta;
+        if (r.AddedBundleHashes.Length > 0)
+            flags |= FifamodResFlags.HasAddedBundles;
+        if (r.BundleAssignmentOnly)
+            flags |= FifamodResFlags.BundleAssignmentOnly;
+        w.WriteByte((byte)flags);
+
+        if (isAdded)
+        {
+            w.WriteUInt32(r.ResType);
+            w.Write(r.ResRid);
+        }
+
+        w.WriteBytes(PadSha1(r.Sha1 is { Length: 20 } ? r.Sha1 : System.Security.Cryptography.SHA1.HashData(payload)));
+        w.Write7BitEncodedInt(originalSize);
+
+        if (flags.HasFlag(FifamodResFlags.HasMeta))
+        {
+            var meta = new byte[16];
             if (r.ResMeta is { Length: > 0 })
-                flags |= FifamodResFlags.HasMeta;
-            w.WriteByte((byte)flags);
-            w.WriteBytes(PadSha1(r.Sha1 is { Length: 20 } ? r.Sha1 : System.Security.Cryptography.SHA1.HashData(payload)));
-            w.Write7BitEncodedInt(originalSize);
-            if (flags.HasFlag(FifamodResFlags.HasMeta))
-            {
-                var meta = new byte[16];
                 Buffer.BlockCopy(r.ResMeta, 0, meta, 0, Math.Min(16, r.ResMeta.Length));
-                w.WriteBytes(meta);
-            }
-            WriteUInt24(w, mod.GameVersion);
-            w.WriteBytes(new byte[20]); // AssetSha1AtImport
-            w.WriteByte(CompressionLevelFastest);
-            w.Write7BitEncodedInt(payload.Length);
-            w.WriteBytes(payload);
-            resWritten++;
+            w.WriteBytes(meta);
         }
-        long afterRes = stream.Position;
-        stream.Position = posRes;
-        WriteUInt24(w, (uint)resWritten);
-        stream.Position = afterRes;
 
-        // --- EBX ---
-        var ebxList = mod.Resources
-            .Where(r => r.Kind == FifamodResourceKind.Ebx && ProjectPayload(r).Length > 0)
-            .ToList();
-        long posEbx = stream.Position;
-        WriteUInt24(w, 0);
-        int ebxWritten = 0;
-        foreach (var e in ebxList)
+        WriteUInt24(w, mod.GameVersion);
+        if (!isAdded)
+            w.WriteBytes(new byte[20]);
+
+        if (r.AddedBundleHashes.Length > 0)
         {
-            byte[] payload = ProjectPayload(e);
-            int originalSize = e.UncompressedSize > 0 ? e.UncompressedSize : payload.Length;
-            w.WriteLengthPrefixedString(e.Name);
-            w.WriteByte((byte)FifamodEbxFlags.IsDirectlyModified);
-            WriteUInt24(w, mod.GameVersion);
-            w.WriteBytes(new byte[20]); // AssetSha1AtImport — editor resolves live base
-
-            // CAS-compressed blob from .fifamod (must pass Decompression.ReadCodecHeader)
-            byte[] sha = e.Sha1 is { Length: 20 }
-                ? e.Sha1
-                : System.Security.Cryptography.SHA1.HashData(payload);
-            w.WriteBytes(PadSha1(sha));
-            w.Write7BitEncodedInt(originalSize);
-            w.WriteByte(CompressionLevelFastest);
-            w.Write7BitEncodedInt(payload.Length);
-            w.WriteBytes(payload);
-            ebxWritten++;
+            w.Write7BitEncodedInt(r.AddedBundleHashes.Length);
+            foreach (ulong h in r.AddedBundleHashes)
+                w.Write(h);
         }
-        long afterEbx = stream.Position;
-        stream.Position = posEbx;
-        WriteUInt24(w, (uint)ebxWritten);
-        stream.Position = afterEbx;
+
+        w.WriteByte(CompressionLevelFastest);
+        w.Write7BitEncodedInt(payload.Length);
+        w.WriteBytes(payload);
+    }
+
+    private static void WriteEbxEntry(EndianBinaryWriter w, FifamodFile mod, FifamodResource e, byte[] payload)
+    {
+        int originalSize = e.UncompressedSize > 0 ? e.UncompressedSize : payload.Length;
+        bool isAdded = e.IsAdded;
+
+        w.WriteLengthPrefixedString(e.Name);
+        var flags = FifamodEbxFlags.IsDirectlyModified;
+        if (isAdded)
+            flags |= FifamodEbxFlags.IsAdded;
+        if (e.AddedBundleHashes.Length > 0)
+            flags |= FifamodEbxFlags.HasAddedBundles;
+        if (e.BundleAssignmentOnly)
+            flags |= FifamodEbxFlags.BundleAssignmentOnly;
+        w.WriteByte((byte)flags);
+
+        if (isAdded)
+        {
+            w.WriteLengthPrefixedString(e.EbxTypeName ?? "TextureAsset");
+            w.WriteGuid(e.EbxGuid != Guid.Empty ? e.EbxGuid : Guid.NewGuid());
+        }
+
+        WriteUInt24(w, mod.GameVersion);
+        if (!isAdded)
+            w.WriteBytes(new byte[20]);
+
+        if (e.AddedBundleHashes.Length > 0)
+        {
+            w.Write7BitEncodedInt(e.AddedBundleHashes.Length);
+            foreach (ulong h in e.AddedBundleHashes)
+                w.Write(h);
+        }
+
+        byte[] sha = e.Sha1 is { Length: 20 }
+            ? e.Sha1
+            : System.Security.Cryptography.SHA1.HashData(payload);
+        w.WriteBytes(PadSha1(sha));
+        w.Write7BitEncodedInt(originalSize);
+        w.WriteByte(CompressionLevelFastest);
+        w.Write7BitEncodedInt(payload.Length);
+        w.WriteBytes(payload);
     }
 
     /// <summary>
-    /// Prefer CAS-compressed bytes. FET always CAS-decompresses ModifiedEntry.Data when opening assets.
-    /// Uncompressed RIFF fails with "Invalid guard bits in codec header: expected 7, got 0x0".
+    /// Prefer CAS-compressed bytes from the mod. FET decompresses ModifiedEntry.Data via codec headers.
+    /// For chunks, store the raw mod payload even when it is not multi-block CAS (sha already matched).
     /// </summary>
-    private static byte[] ProjectPayload(FifamodResource r)
+    internal static byte[] ProjectPayload(FifamodResource r)
     {
         if (r.CompressedData is { Length: > 0 })
             return r.CompressedData;
-        // Last resort: wrap raw data is not valid CAS — return empty so we skip rather than poison the project
-        if (r.Data is { Length: >= 8 } && LooksLikeCasHeader(r.Data))
+        if (r.Data is { Length: > 0 })
             return r.Data;
         return Array.Empty<byte>();
-    }
-
-    private static bool LooksLikeCasHeader(byte[] data)
-    {
-        // u32be size, u32be with guard nibble 7 at bits 20-23
-        if (data.Length < 8)
-            return false;
-        uint word1 = (uint)((data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7]);
-        uint guard = (word1 >> 20) & 0xF;
-        return guard == 7;
     }
 
     private static byte[] PadSha1(byte[] sha)

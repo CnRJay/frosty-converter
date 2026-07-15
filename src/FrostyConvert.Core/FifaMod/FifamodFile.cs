@@ -32,6 +32,13 @@ public sealed class FifamodResource
     public FifamodChunkFlags ChunkFlags { get; init; }
 
     public Guid ChunkId { get; init; }
+
+    /// <summary>For added EBX entries written into .fifaproject (e.g. promoted TextureAsset).</summary>
+    public Guid EbxGuid { get; init; }
+
+    /// <summary>EBX type name for added assets (e.g. "TextureAsset").</summary>
+    public string? EbxTypeName { get; init; }
+
     public byte[] Sha1 { get; init; } = Array.Empty<byte>();
 
     /// <summary>Absolute file offset of compressed payload.</summary>
@@ -44,6 +51,14 @@ public sealed class FifamodResource
     public ulong ResRid { get; init; }
     public byte[] ResMeta { get; init; } = Array.Empty<byte>();
 
+    // Chunk-only fields (from .fifamod index)
+    public int LogicalOffset { get; init; }
+    public int LogicalSize { get; init; }
+    public ulong H32 { get; init; }
+    public uint SuperBundleHash { get; init; }
+    public ulong LegacyFileNameHash { get; init; }
+    public string? LegacyFileName { get; init; }
+
     public ulong[] AddedBundleHashes { get; init; } = Array.Empty<ulong>();
     public bool BundleAssignmentOnly { get; init; }
 
@@ -51,6 +66,15 @@ public sealed class FifamodResource
     public byte[]? Data { get; set; }
     public bool Sha1MatchesCompressed { get; set; }
     public string? DecompressError { get; set; }
+
+    public bool IsAdded =>
+        Kind switch
+        {
+            FifamodResourceKind.Ebx => EbxFlags.HasFlag(FifamodEbxFlags.IsAdded),
+            FifamodResourceKind.Res => ResFlags.HasFlag(FifamodResFlags.IsAdded),
+            FifamodResourceKind.Chunk => ChunkFlags.HasFlag(FifamodChunkFlags.IsAdded),
+            _ => false,
+        };
 }
 
 public enum FifamodResourceKind

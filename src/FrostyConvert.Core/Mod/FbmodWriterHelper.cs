@@ -116,6 +116,8 @@ public static class FbmodWriterHelper
                     w.Write(meta);
                 break;
             case ModResourceType.Chunk:
+                // Writer always emits open-Frosty / v5 chunk layout (no h64 / superBundles).
+                // Production MMC mods are read by FbmodReader; synthetic fixtures stay v5.
                 w.Write(r.RangeStart);
                 w.Write(r.RangeEnd);
                 w.Write(r.LogicalOffset);

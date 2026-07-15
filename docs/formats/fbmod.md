@@ -41,7 +41,7 @@ Little-endian unless noted.
 4. Structural changes; removal of modifiedBundles (only *added* bundles stored)
 5. Mod page link field
 6–7. Used by private Madden/College Football Frosty forks (not in CadeEvs 1.0.6.3).  
-   Real-world fixture `cnr-gameplaymod.fbmod` is **v7 / CollegeFB27** and parses with the v5 resource layout (no extra fields observed before the resource table).
+   Version **&gt; 5** adds a superBundle list on **Chunk** resources. Version **≥ 7** on CollegeFB27/Madden27 also inserts an **h64** (i64) after **h32** when the chunk has no custom handler. Header/details layout is otherwise the same as v5.
 
 ## Mod details
 
@@ -106,14 +106,18 @@ Bundle hashes are FNV1 of lowercased bundle name, with a special case for 8-char
 
 **Chunk**
 
-| Field | Type |
-|-------|------|
-| rangeStart | u32 |
-| rangeEnd | u32 |
-| logicalOffset | u32 |
-| logicalSize | u32 |
-| h32 | i32 |
-| firstMip | i32 |
+| Field | Type | Notes |
+|-------|------|-------|
+| rangeStart | u32 | |
+| rangeEnd | u32 | |
+| logicalOffset | u32 | |
+| logicalSize | u32 | |
+| h32 | i32 | |
+| h64 | i64 | **MMC only:** version ≥ 7, `handlerHash == 0`, and profile is CollegeFB27 / Madden27 |
+| firstMip | i32 | |
+| superBundles count + ints | i32 + i32×N | **MMC only:** version &gt; 5 (count may be 0) |
+
+Open Frosty 1.0.6.x stops at `firstMip` (no `h64` / superBundles). MMC CollegeFB/Madden forks extend the layout as above; FrostyConvert matches that so large texture `.fbmod`s parse without `EndOfStreamException`.
 
 **Bundle**
 

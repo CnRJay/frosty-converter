@@ -210,6 +210,10 @@ public static class FifamodReader
             });
         }
 
+        bool h32IsU64 = gameName.StartsWith("FC26", StringComparison.OrdinalIgnoreCase)
+                        || gameName.StartsWith("FC 26", StringComparison.OrdinalIgnoreCase)
+                        || gameName.Contains("26", StringComparison.Ordinal);
+
         uint chunkCount = ReadUInt24(reader);
         for (uint i = 0; i < chunkCount; i++)
         {
@@ -218,23 +222,26 @@ public static class FifamodReader
             var flags = (FifamodChunkFlags)reader.ReadUInt16();
             long relOff = Read7BitEncodedLong(reader);
             int length = reader.Read7BitEncodedInt();
+            int logicalOffset = 0;
+            int logicalSize = 0;
+            ulong h32 = 0;
+            ulong legacyHash = 0;
+            string? legacyName = null;
+            uint superBundleHash = 0;
+
             if (flags.HasFlag(FifamodChunkFlags.HasLogicalOffset))
-                _ = reader.Read7BitEncodedInt();
+                logicalOffset = reader.Read7BitEncodedInt();
             if (flags.HasFlag(FifamodChunkFlags.HasLogicalSize))
-                _ = reader.Read7BitEncodedInt();
+                logicalSize = reader.Read7BitEncodedInt();
             if (flags.HasFlag(FifamodChunkFlags.HasH32))
             {
-                // FC26+ uses u64; older u32 — use game name heuristic
-                if (gameName.StartsWith("FC26", StringComparison.OrdinalIgnoreCase) ||
-                    gameName.StartsWith("FC 26", StringComparison.OrdinalIgnoreCase))
-                    _ = reader.ReadUInt64();
-                else
-                    _ = reader.ReadUInt32();
+                // FC26+ uses u64; older titles used u32
+                h32 = h32IsU64 ? reader.ReadUInt64() : reader.ReadUInt32();
             }
             if (flags.HasFlag(FifamodChunkFlags.IsLegacy))
             {
-                _ = reader.ReadUInt64();
-                _ = reader.ReadLengthPrefixedString();
+                legacyHash = reader.ReadUInt64();
+                legacyName = reader.ReadLengthPrefixedString();
             }
             ulong[] bundles = Array.Empty<ulong>();
             if (flags.HasFlag(FifamodChunkFlags.HasAddedBundles))
@@ -245,7 +252,7 @@ public static class FifamodReader
                     bundles[b] = reader.ReadUInt64();
             }
             if (flags.HasFlag(FifamodChunkFlags.AddToSuperBundle))
-                _ = reader.ReadUInt32();
+                superBundleHash = reader.ReadUInt32();
 
             resources.Add(new FifamodResource
             {
@@ -257,6 +264,12 @@ public static class FifamodReader
                 FileOffset = dataBaseOffset + relOff,
                 CompressedSize = length,
                 UncompressedSize = 0,
+                LogicalOffset = logicalOffset,
+                LogicalSize = logicalSize,
+                H32 = h32,
+                SuperBundleHash = superBundleHash,
+                LegacyFileNameHash = legacyHash,
+                LegacyFileName = legacyName,
                 AddedBundleHashes = bundles,
                 BundleAssignmentOnly = flags.HasFlag(FifamodChunkFlags.BundleAssignmentOnly),
             });

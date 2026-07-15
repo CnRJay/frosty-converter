@@ -2,9 +2,9 @@ using System.Text;
 using FrostyConvert.Core.Convert;
 using FrostyConvert.Core.FifaMod;
 using FrostyConvert.Core.Inspect;
+using FrostyConvert.Core.Legacy;
 using FrostyConvert.Core.Mod;
 using FrostyConvert.Core.Project;
-// FifaprojectWriter lives in Project namespace
 
 namespace FrostyConvert.Cli;
 
@@ -40,15 +40,25 @@ internal static class Program
         bool inspectProject = HasFlag(args, "--inspect-project");
         string? reportPath = GetOption(args, "--report");
         string? extractDir = GetOption(args, "--extract");
+        string? extractLegacyDir = GetOption(args, "--extract-legacy");
         string? outputPath = GetOption(args, "-o") ?? GetOption(args, "--output");
         string? oodlePath = GetOption(args, "--oodle");
         bool json = HasFlag(args, "--json");
+        bool promoteTextures = HasFlag(args, "--promote-legacy-textures");
+        string? texturePrefix = GetOption(args, "--texture-prefix") ?? "content/ui/legacy";
+        // Default empty = promote every detectable DDS (full Data Explorer recovery)
+        string? textureFilter = GetOption(args, "--texture-filter") ?? "";
+        string? maxPromoteStr = GetOption(args, "--texture-max");
+        int textureMax = 0;
+        if (!string.IsNullOrEmpty(maxPromoteStr) && int.TryParse(maxPromoteStr, out int mp))
+            textureMax = mp;
 
         string? inputPath = null;
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] is "--report" or "--extract" or "-o" or "--output" or "-g" or "--key"
-                or "--plugins" or "--force-profile" or "--oodle")
+            if (args[i] is "--report" or "--extract" or "--extract-legacy" or "-o" or "--output"
+                or "-g" or "--key" or "--plugins" or "--force-profile" or "--oodle"
+                or "--texture-prefix" or "--texture-filter" or "--texture-max" or "--texture-template")
             {
                 i++;
                 continue;
@@ -89,14 +99,111 @@ internal static class Program
                     FrostyConvert.Core.Compression.Oodle.TryBind(oodlePath);
 
                 var fifa = FifamodReader.Read(inputPath, loadResourceData: true, decompress: true);
-                FifaprojectWriter.Write(outputPath, fifa);
 
-                int ebx = fifa.Resources.Count(r => r.Kind == FifamodResourceKind.Ebx && r.Data is { Length: > 0 });
+                if (extractLegacyDir is not null)
+                {
+                    var ex = LegacyExtractor.Extract(fifa, extractLegacyDir, pathFilter: null);
+                    Console.WriteLine(
+                        $"Extracted legacy files: written={ex.Written} skipped={ex.Skipped} errors={ex.Errors} → {extractLegacyDir}");
+                    foreach (var msg in ex.ErrorMessages)
+                        Console.WriteLine($"  extract error: {msg}");
+                }
+
+                TexturePromoteResult? promote = null;
+                IReadOnlyList<FifamodResource>? extra = null;
+                if (promoteTextures)
+                {
+                    promote = TextureAssetPromoter.Promote(fifa, new TexturePromoteOptions
+                    {
+                        NamePrefix = texturePrefix,
+                        PathFilter = textureFilter ?? "",
+                        MaxCount = textureMax,
+                    });
+                    extra = promote.Resources;
+                    Console.WriteLine(
+                        $"Promote → Data Explorer TextureAssets: promoted={promote.PromotedCount} " +
+                        $"(ddsCandidates={promote.CandidateCount}, wrappedRes={promote.WrappedExistingRes}, " +
+                        $"filter='{textureFilter}', skipFilter={promote.SkippedFilter}, " +
+                        $"skipNotDds={promote.SkippedNotDds}, errors={promote.SkippedErrors})");
+                    if (promote.LegacyExtHistogram.Count > 0)
+                    {
+                        Console.WriteLine("  Legacy file types in mod:");
+                        foreach (var kv in promote.LegacyExtHistogram.OrderByDescending(k => k.Value))
+                            Console.WriteLine($"    {kv.Key}: {kv.Value}");
+                    }
+                    foreach (var note in promote.NonTextureLegacyNotes)
+                        Console.WriteLine($"  note: {note}");
+                    foreach (var n in promote.SampleNames.Take(8))
+                        Console.WriteLine($"  + {n}");
+                    foreach (var e in promote.Errors)
+                        Console.WriteLine($"  promote: {e}");
+                    if (promote.PromotedCount == 0 && promote.Errors.Count > 0)
+                    {
+                        Console.Error.WriteLine("error: texture promotion produced no assets.");
+                        return ExitFailure;
+                    }
+                }
+
+                var writable = FifaprojectWriter.CountWritable(fifa, extra);
+                FifaprojectWriter.Write(outputPath, fifa, extra);
+
                 int err = fifa.Resources.Count(r => r.DecompressError is not null);
-                Console.WriteLine($"Wrote FIFA Editor project: {outputPath}");
+                long outLen = new FileInfo(outputPath).Length;
+                Console.WriteLine($"Wrote FIFA Editor project: {outputPath} ({outLen:N0} bytes)");
                 Console.WriteLine($"  game={fifa.GameName} title={fifa.Details.Title}");
-                Console.WriteLine($"  ebx payloads={ebx}/{fifa.EbxCount}  res={fifa.ResCount}  chunks={fifa.ChunkCount}  decompress_errors={err}");
-                Console.WriteLine("  Next: open FIFA Editor Tool → load FC26 → File → Open Project → this .fifaproject");
+                Console.WriteLine(
+                    $"  written: ebx={writable.Ebx}  res={writable.Res}  " +
+                    $"chunks={writable.Chunks}  decompress_errors={err}");
+                if (promote is not null)
+                    Console.WriteLine($"  (includes {promote.PromotedCount} promoted TextureAssets for Data Explorer)");
+
+                // Offline self-check against EditorProject.Load layout
+                try
+                {
+                    var check = FifaprojectReader.ReadSummary(outputPath);
+                    Console.WriteLine(
+                        $"  verify: chunks={check.ChunkCount} legacy={check.LegacyChunkCount} " +
+                        $"(added paths={check.LegacyAddedCount}) res={check.ResCount} ebx={check.EbxCount}");
+                    foreach (var w in check.Warnings)
+                        Console.WriteLine($"  verify warning: {w}");
+
+                    if (promote is not null && promote.PromotedCount > 0)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("  *** Promoted TextureAssets → use DATA EXPLORER (Show Only Modified) ***");
+                        Console.WriteLine($"  Look under: {texturePrefix}/…");
+                        Console.WriteLine("  Open a TextureAsset to preview/edit in the Texture editor.");
+                        Console.WriteLine("  Original legacy files remain in Legacy Explorer for mod export fidelity.");
+                    }
+                    else if (check.LegacyChunkCount > 0)
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("  *** This mod is mostly LEGACY files (UI / .big / fonts), not EBX. ***");
+                        Console.WriteLine("  Tip: re-run with --promote-legacy-textures to put crest/UI .dds into Data Explorer.");
+                        Console.WriteLine("  Or use Legacy Explorer + Show Only Modified for data/ui/… paths.");
+                        Console.WriteLine("  Sample legacy paths:");
+                        foreach (var p in fifa.Resources
+                                     .Where(x => x.Kind == FifamodResourceKind.Chunk && !string.IsNullOrEmpty(x.LegacyFileName))
+                                     .Select(x => x.LegacyFileName!)
+                                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                                     .Take(10))
+                            Console.WriteLine($"    - {p}");
+                    }
+                    if (check.EbxCount > 0)
+                    {
+                        Console.WriteLine("  Sample EBX (Data Explorer):");
+                        foreach (var n in check.SampleEbxNames.Take(6))
+                            Console.WriteLine($"    - {n}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"  verify failed (project may not load in FET): {ex.Message}");
+                    return ExitFailure;
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("  Next: open FIFA Editor Tool → load the game → File → Open Project → this .fifaproject");
                 Console.WriteLine("  Then File → Save to re-serialize with live types (same idea as MMC import).");
 
                 if (reportPath is not null)
@@ -108,8 +215,11 @@ internal static class Program
                     File.WriteAllText(reportPath, rep.ToJson(), Encoding.UTF8);
                 }
 
-                if (err > 0 && ebx == 0)
+                if (writable.Ebx + writable.Res + writable.Chunks == 0)
+                {
+                    Console.Error.WriteLine("error: no assets were written into the project (empty conversion).");
                     return ExitFailure;
+                }
                 if (err > 0)
                     return ExitPartial;
                 return ExitOk;
@@ -314,7 +424,7 @@ Usage:
   fbmod2project <mod.fbmod> --inspect [--json] [--report out.json] [--extract dir]
   fbmod2project <mod.fifamod> --inspect [--oodle dll] [--json] [--report out.json] [--extract dir]
   fbmod2project <mod.fbmod> -o recovered.fbproject [--oodle dll] [--json] [--report out.json]
-  fbmod2project <mod.fifamod> -o recovered.fifaproject [--oodle dll]
+  fbmod2project <mod.fifamod> -o recovered.fifaproject [--oodle dll] [FIFA options]
   fbmod2project <proj.fbproject> --inspect-project
 
 Options:
@@ -325,17 +435,26 @@ Options:
   --json              Emit reports as JSON
   --report <path>     Write JSON report to a file
   --extract <dir>     Write resource payloads to a directory (inspect)
+  --extract-legacy <dir>
+                      Write named legacy files (data/ui/…) from a .fifamod (with -o convert)
+  --promote-legacy-textures
+                      Promote every detectable legacy .dds to TextureAsset EBX for Data
+                      Explorer. Also wraps existing content/ Texture RES. Keeps all
+                      original legacy files (.big Apt UI, fonts, xml, …) for Legacy Explorer.
+  --texture-prefix P  Name prefix for promoted assets (default: content/ui/legacy)
+  --texture-filter S  Only promote legacy paths containing S (default: empty = all .dds)
+  --texture-max N     Cap number of promoted textures (0 = no limit)
   -h, --help          Show help
 
 Notes:
   .fbmod → offline .fbproject, or use the MMC live-import plugin (preferred for CFB/Madden).
 
-  .fifamod → .fifaproject for FIFA Editor Tool. FET has no Plugins folder (closed
-  single-file app), so live import cannot mirror the MMC plugin DLL. Instead:
-    1) convert to .fifaproject
+  .fifamod → .fifaproject for FIFA Editor Tool:
+    1) convert (add --promote-legacy-textures for crest/UI DDS → Data Explorer)
     2) open FET, load FC26
     3) File → Open Project → recovered.fifaproject
-    4) edit assets, Save / export mod
+    4) Data Explorer (promoted TextureAssets) and/or Legacy Explorer (original files)
+    5) edit, Save / export mod
 
   Oodle is bundled as oodle-data-shared.dll (UE/OodleUE build).
 """);

@@ -37,10 +37,12 @@ public static class CasBlockDecompressorNet48
     private static bool LooksLikeCas(byte[] data)
     {
         int decomp = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-        if (decomp <= 0 || decomp > 0x400000) return false;
+        // Per-block uncompressed size (texture mip blocks can be large)
+        if (decomp <= 0 || decomp > 0x4000000) return false;
         ushort raw = (ushort)(data[4] | (data[5] << 8));
         int type = raw & 0x7F;
-        return type is 0x00 or 0x02 or 0x09 or 0x0F or 0x11 or 0x15;
+        // 0x19 = Oodle variant used by recent Frostbite / FIFA titles
+        return type is 0x00 or 0x02 or 0x09 or 0x0F or 0x11 or 0x15 or 0x19;
     }
 
     private static byte[]? ReadBlock(BinaryReader br, Stream stream)
@@ -61,13 +63,23 @@ public static class CasBlockDecompressorNet48
         byte[] compressed = br.ReadBytes(bufferSize);
         return compressionType switch
         {
-            0x00 => compressed,
+            0x00 => compressed.Length == decompSize
+                ? compressed
+                : PadOrTrim(compressed, decompSize),
             0x02 => Zlib(compressed, decompSize),
             0x09 => Lz4(compressed, decompSize),
             0x0F => Zstd(compressed, decompSize),
-            0x11 or 0x15 => OodleNet48.Decompress(compressed, decompSize),
+            0x11 or 0x15 or 0x19 => OodleNet48.Decompress(compressed, decompSize),
             _ => throw new CasDecompressException($"Unknown CAS type 0x{compressionType:X2}"),
         };
+    }
+
+    private static byte[] PadOrTrim(byte[] data, int size)
+    {
+        if (data.Length == size) return data;
+        var o = new byte[size];
+        Buffer.BlockCopy(data, 0, o, 0, Math.Min(data.Length, size));
+        return o;
     }
 
     private static byte[] Zlib(byte[] c, int size)

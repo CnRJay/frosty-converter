@@ -23,7 +23,11 @@ public sealed class FbmodResource
     public uint LogicalOffset { get; init; }
     public uint LogicalSize { get; init; }
     public int H32 { get; init; }
+    /// <summary>MMC CollegeFB27/Madden27 v7 extension (after H32, only when no handler).</summary>
+    public long H64 { get; init; }
     public int FirstMip { get; init; }
+    /// <summary>Superbundle FNV hashes added by the chunk (MMC mod version &gt; 5).</summary>
+    public IReadOnlyList<int> SuperBundlesToAdd { get; init; } = Array.Empty<int>();
 
     // Bundle-specific
     public int SuperBundleHash { get; init; }
