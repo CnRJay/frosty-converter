@@ -42,7 +42,7 @@ if (-not (Test-Path $Oodle)) {
 $artifacts = @()
 
 # ---------------------------------------------------------------------------
-# FIFA / CLI tool (self-contained win-x64)
+# FIFA / CLI + GUI tool (self-contained win-x64)
 # ---------------------------------------------------------------------------
 if (-not $SkipCli) {
     Write-Host "==> Publishing CLI (self-contained win-x64)..." -ForegroundColor Cyan
@@ -60,9 +60,24 @@ if (-not $SkipCli) {
         -o $cliOut
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish CLI failed" }
 
-    # Keep only: single-file exe + native Oodle + INSTALL
+    Write-Host "==> Publishing FIFA GUI (self-contained win-x64)..." -ForegroundColor Cyan
+    $guiTmp = Join-Path $Staging "FifaGui_publish"
+    if (Test-Path $guiTmp) { Remove-Item $guiTmp -Recurse -Force }
+    & dotnet publish (Join-Path $Root "src\FrostyConvert.FifaGui\FrostyConvert.FifaGui.csproj") `
+        -c $Configuration `
+        -r win-x64 `
+        --self-contained true `
+        -p:PublishSingleFile=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
+        -p:Version=$Version `
+        -o $guiTmp
+    if ($LASTEXITCODE -ne 0) { throw "dotnet publish FIFA GUI failed" }
+    Copy-Item (Join-Path $guiTmp "FrostyConvert.FifaGui.exe") $cliOut -Force
+
+    # Keep only: single-file exes + native Oodle + INSTALL
     Get-ChildItem $cliOut -File | Where-Object {
-        $_.Name -notin @("fbmod2project.exe", "INSTALL.txt") -and
+        $_.Name -notin @("fbmod2project.exe", "FrostyConvert.FifaGui.exe", "INSTALL.txt") -and
         $_.Extension -ne ".exe"
     } | Remove-Item -Force -ErrorAction SilentlyContinue
     Get-ChildItem $cliOut -Filter *.pdb -ErrorAction SilentlyContinue | Remove-Item -Force

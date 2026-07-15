@@ -15,19 +15,20 @@ Prebuilt Windows packages are attached to each [GitHub Release](../../releases):
 
 | Asset | What it is |
 |-------|------------|
-| **`FrostyConvert-FifaTool-v*-win-x64.zip`** | Self-contained CLI — convert `.fifamod` → `.fifaproject` (also inspects `.fbmod`) |
+| **`FrostyConvert-FifaTool-v*-win-x64.zip`** | Self-contained GUI + CLI — convert `.fifamod` → `.fifaproject` (CLI also inspects `.fbmod`) |
 | **`FrostyConvert-MmcPlugin-v*.zip`** | MMC Editor plugin — live import of `.fbmod` for CFB/Madden |
 
 ### FIFA tool install
 
-1. Download **FifaTool** zip → unzip (only **3 files**: `fbmod2project.exe`, `oodle-data-shared.dll`, `INSTALL.txt`).
-2. Run:
+1. Download **FifaTool** zip → unzip (`FrostyConvert.FifaGui.exe`, `fbmod2project.exe`, `oodle-data-shared.dll`, `INSTALL.txt`).
+2. **GUI:** double-click `FrostyConvert.FifaGui.exe`, pick a `.fifamod`, Convert.  
+   **CLI:**
    ```bat
    fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
    ```
 3. In FIFA Editor Tool: load the game → **File → Open Project** → `recovered.fifaproject`.
 
-Keep the `.exe` and `oodle-data-shared.dll` in the same folder.
+Keep the `.exe` files and `oodle-data-shared.dll` in the same folder.
 ### MMC plugin install
 
 1. Download **MmcPlugin** zip → close MMC Editor.
@@ -54,7 +55,13 @@ dotnet build FrostyConvert.slnx
 dotnet test tests/FrostyConvert.Tests
 ```
 
-CLI project: `src/FrostyConvert.Cli` (assembly name `fbmod2project`).
+CLI project: `src/FrostyConvert.Cli` (assembly name `fbmod2project`).  
+GUI project: `src/FrostyConvert.FifaGui` (WinForms: `.fifamod` → `.fifaproject`).
+
+```bash
+dotnet run --project src/FrostyConvert.FifaGui
+```
+
 ## CLI
 
 ```bash
@@ -125,8 +132,9 @@ You do not need a game `oo2core_*.dll` for typical CFB/Madden or FC26 mods.
 
 ```text
 src/FrostyConvert.Core/       Shared parsers and converters
-src/FrostyConvert.Cli/       Command-line tool
-src/FrostyConvert.MmcPlugin/ MMC Editor import menu
+src/FrostyConvert.Cli/         Command-line tool
+src/FrostyConvert.FifaGui/     Simple GUI for .fifamod → .fifaproject
+src/FrostyConvert.MmcPlugin/   MMC Editor import menu
 scripts/pack-release.ps1      Build both release zips
 packaging/                    INSTALL.txt templates for zips
 .github/workflows/            CI + tag-triggered releases

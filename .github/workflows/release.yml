@@ -106,9 +106,20 @@ jobs:
             -p:EnableCompressionInSingleFile=true `
             -p:Version=$ver -o $cliOut
           if ($LASTEXITCODE -ne 0) { throw "CLI publish failed" }
-          # Single-file exe only; drop loose runtime DLLs / json / pdb
+          $guiTmp = "dist/_staging/FifaGui_publish"
+          if (Test-Path $guiTmp) { Remove-Item $guiTmp -Recurse -Force }
+          dotnet publish src/FrostyConvert.FifaGui/FrostyConvert.FifaGui.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:Version=$ver -o $guiTmp
+          if ($LASTEXITCODE -ne 0) { throw "FIFA GUI publish failed" }
+          Copy-Item "$guiTmp/FrostyConvert.FifaGui.exe" $cliOut -Force
+          # Single-file exes only; drop loose runtime DLLs / json / pdb
           Get-ChildItem $cliOut -File | Where-Object {
-            $_.Name -ne "fbmod2project.exe" -and $_.Extension -ne ".exe"
+            $_.Name -notin @("fbmod2project.exe", "FrostyConvert.FifaGui.exe") -and
+            $_.Extension -ne ".exe"
           } | Remove-Item -Force -ErrorAction SilentlyContinue
           Copy-Item third_party/oodle/bin/oodle-data-shared.dll $cliOut -Force
           Copy-Item packaging/FifaTool/INSTALL.txt $cliOut -Force
@@ -166,13 +177,14 @@ jobs:
 
             | Package | Use for |
             |---------|---------|
-            | **FrostyConvert-FifaTool-…-win-x64.zip** | FIFA / EA FC — convert `.fifamod` → `.fifaproject` (CLI) |
+            | **FrostyConvert-FifaTool-…-win-x64.zip** | FIFA / EA FC — convert `.fifamod` → `.fifaproject` (GUI + CLI) |
             | **FrostyConvert-MmcPlugin-….zip** | College Football / Madden — MMC live `.fbmod` import |
 
             ### FIFA tool
-            1. Unzip anywhere.
-            2. `fbmod2project.exe mod.fifamod -o recovered.fifaproject`
-            3. Open the project in FIFA Editor Tool with the game loaded.
+            1. Unzip anywhere (keep `.exe` files and `oodle-data-shared.dll` together).
+            2. **GUI:** double-click `FrostyConvert.FifaGui.exe`, pick a `.fifamod`, Convert.
+            3. **CLI:** `fbmod2project.exe mod.fifamod -o recovered.fifaproject`
+            4. Open the project in FIFA Editor Tool with the game loaded.
 
             ### MMC plugin
             1. Close MMC Editor.

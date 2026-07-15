@@ -1,17 +1,33 @@
-FrostyConvert — FIFA / EA FC tool (CLI)
-======================================
+FrostyConvert — FIFA / EA FC tool
+================================
 
 Convert compiled FIFA Editor Tool / Mod Manager .fifamod files into
 editable .fifaproject files.
 
-Package contents (3 files)
---------------------------
-  fbmod2project.exe     — single-file tool (Windows x64, .NET runtime embedded)
-  oodle-data-shared.dll — Oodle decompression (must stay next to the .exe)
-  INSTALL.txt           — this file
+Package contents
+----------------
+  FrostyConvert.FifaGui.exe — simple GUI (double-click to convert)
+  fbmod2project.exe         — CLI tool (Windows x64, .NET runtime embedded)
+  oodle-data-shared.dll     — Oodle decompression (must stay next to the .exes)
+  INSTALL.txt               — this file
 
-Quick start
------------
+Quick start (GUI)
+-----------------
+1. Unzip this folder anywhere (keep the .exes and .dll in the same folder).
+
+2. Double-click FrostyConvert.FifaGui.exe
+
+3. Browse to a .fifamod (or drag-and-drop), optionally check "Promote legacy
+   textures", then click Convert.
+
+4. Open FIFA Editor Tool, load the matching game (e.g. FC26).
+
+5. File → Open Project → recovered.fifaproject
+
+6. Edit assets, then save / export a new mod if desired.
+
+Quick start (CLI)
+-----------------
 1. Unzip this folder anywhere (keep the .exe and .dll in the same folder).
 
 2. Open a terminal in this folder and run:

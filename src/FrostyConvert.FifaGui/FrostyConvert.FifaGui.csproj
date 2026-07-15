@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>FrostyConvert.FifaGui</AssemblyName>
+    <RootNamespace>FrostyConvert.FifaGui</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>FrostyConvert FIFA</Product>
+    <Description>Convert .fifamod files to editable .fifaproject files</Description>
+    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FrostyConvert.Core\FrostyConvert.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\third_party\oodle\bin\oodle-data-shared.dll" Condition="Exists('..\..\third_party\oodle\bin\oodle-data-shared.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>oodle-data-shared.dll</Link>
+    </None>
+  </ItemGroup>
+
+</Project>

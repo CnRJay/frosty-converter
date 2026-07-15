@@ -11,7 +11,9 @@
 
 ### Convert
 
-**Release zip** (`FrostyConvert-FifaTool-v*-win-x64.zip` from GitHub Releases):
+**GUI** (easiest): double-click `FrostyConvert.FifaGui.exe` from the release zip, pick a `.fifamod`, Convert.
+
+**Release zip CLI** (`FrostyConvert-FifaTool-v*-win-x64.zip` from GitHub Releases):
 
 ```bat
 fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
@@ -20,6 +22,8 @@ fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
 **From source:**
 
 ```bash
+dotnet run --project src/FrostyConvert.FifaGui
+# or CLI:
 dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
 ```
 
