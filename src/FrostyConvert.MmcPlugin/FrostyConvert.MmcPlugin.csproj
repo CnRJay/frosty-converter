@@ -27,6 +27,27 @@
       Text="MMC/Frosty reference assemblies not found. Copy FrostyCore.dll, FrostySdk.dll, and FrostyControls.dll from your MMC Editor folder into third_party/mmc-refs/ (or set MmcEditorDir)." />
   </Target>
 
+  <!--
+    MMC 1.1+: AssetEntry lives in FrostySdk.Managers.Entries.
+    Stock FrostyEditor (CI compile refs): same types in FrostySdk.Managers.
+    Detect once per build unless FrostyEntryNamespace is set explicitly (Entries|Legacy).
+  -->
+  <Target Name="DetectFrostyEntryNamespace" BeforeTargets="BeforeCompile" Condition="'$(FrostyEntryNamespace)' == '' and Exists('$(_FrostySdk)')">
+    <PropertyGroup>
+      <_DetectEntryNsScript>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\scripts\detect-frosty-entry-ns.ps1'))</_DetectEntryNsScript>
+    </PropertyGroup>
+    <Exec
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(_DetectEntryNsScript)&quot; -SdkPath &quot;$(_FrostySdk)&quot;"
+      ConsoleToMSBuild="true"
+      StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" ItemName="_FrostyEntryNsDetectLines" />
+    </Exec>
+    <PropertyGroup>
+      <FrostyEntryNamespace>@(_FrostyEntryNsDetectLines->Trim())</FrostyEntryNamespace>
+    </PropertyGroup>
+    <Message Importance="high" Text="FrostySdk entry layout: $(FrostyEntryNamespace) ($(_FrostySdk))" />
+  </Target>
+
   <ItemGroup>
     <Compile Include="..\FrostyConvert.Core\IO\EndianBinaryReader.cs" Link="Core\EndianBinaryReader.cs" />
     <Compile Include="..\FrostyConvert.Core\Convert\FbmodImportReadiness.cs" Link="Core\FbmodImportReadiness.cs" />
@@ -38,6 +59,17 @@
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodResource.cs" Link="Core\FbmodResource.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\ModResourceType.cs" Link="Core\ModResourceType.cs" />
   </ItemGroup>
+
+  <!-- SDK glob would always include this; re-add only for MMC Entries layout. -->
+  <ItemGroup>
+    <Compile Remove="FrostyEntryAliases.Entries.cs" />
+  </ItemGroup>
+
+  <Target Name="ApplyFrostyEntryAliases" BeforeTargets="BeforeCompile" DependsOnTargets="DetectFrostyEntryNamespace">
+    <ItemGroup Condition="'$(FrostyEntryNamespace)' != 'Legacy'">
+      <Compile Include="FrostyEntryAliases.Entries.cs" />
+    </ItemGroup>
+  </Target>
 
   <!-- Global usings for linked Core files that assume modern implicit usings -->
   <ItemGroup>

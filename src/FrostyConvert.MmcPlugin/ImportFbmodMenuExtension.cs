@@ -16,7 +16,6 @@ using FrostyConvert.Core.Mod;
 using FrostySdk;
 using FrostySdk.IO;
 using FrostySdk.Managers;
-using FrostySdk.Managers.Entries;
 using HandlerExtraData = Frosty.Core.Mod.HandlerExtraData;
 using IModCustomActionHandler = Frosty.Core.Mod.IModCustomActionHandler;
 using RuntimeResources = Frosty.Core.Mod.RuntimeResources;
