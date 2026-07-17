@@ -12,8 +12,9 @@ public static class FbmodConstants
     /// Highest binary mod format version we document from open Frosty 1.0.6.3 is 5.
     /// Madden/College Football forks ship mods at least up to version 7 with the same
     /// core resource table layout (validated against real fixtures).
+    /// MMC 1.1.0.1+ writes version 8 with AES+HMAC-encrypted payloads (<see cref="FbmodCryptor"/>).
     /// </summary>
-    public const uint MaxBinaryVersion = 7;
+    public const uint MaxBinaryVersion = 8;
 
     /// <summary>Highest project format version known from Frosty 1.0.6.3.</summary>
     public const uint ProjectFormatVersion = 14;

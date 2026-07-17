@@ -275,4 +275,80 @@ public class FbmodReaderTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Cryptor_RoundTrip_RestoresPlaintext()
+    {
+        byte[] plain = Enumerable.Range(0, 64).Select(i => (byte)i).ToArray();
+        byte[] enc = FbmodCryptor.Encrypt(plain);
+        Assert.True(FbmodCryptor.IsEncrypted(enc));
+        Assert.StartsWith("FMENC001", System.Text.Encoding.ASCII.GetString(enc, 0, 8));
+        Assert.Equal(plain, FbmodCryptor.Decrypt(enc));
+        Assert.Equal(plain, FbmodCryptor.MaybeDecrypt(enc));
+        Assert.Equal(plain, FbmodCryptor.MaybeDecrypt(plain));
+    }
+
+    [Fact]
+    public void Cryptor_TamperedMac_Throws()
+    {
+        byte[] enc = FbmodCryptor.Encrypt(new byte[] { 1, 2, 3, 4 });
+        enc[30] ^= 0xFF; // flip a MAC byte
+        Assert.Throws<FbmodReaderException>(() => FbmodCryptor.Decrypt(enc));
+    }
+
+    [Fact]
+    public void Read_V8EncryptedPayload_DecryptsOnLoad()
+    {
+        byte[] plain = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02 };
+        byte[] encrypted = FbmodCryptor.Encrypt(plain);
+
+        using var ms = new MemoryStream();
+        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            w.Write(FbmodConstants.BinaryMagic);
+            w.Write(8u);
+            long dataOffsetPos = ms.Position;
+            w.Write(0L);
+            w.Write(0);
+            w.Write("CollegeFB27");
+            w.Write(4298863);
+
+            void Nt(string s)
+            {
+                w.Write(System.Text.Encoding.UTF8.GetBytes(s));
+                w.Write((byte)0);
+            }
+            Nt("Enc"); Nt("A"); Nt("C"); Nt("1"); Nt("D"); Nt("");
+
+            w.Write(1);
+            w.Write((byte)ModResourceType.Ebx);
+            w.Write(0);
+            Nt("systems/encrypted");
+            w.Write(new byte[20]);
+            w.Write((long)plain.Length); // logical size is plaintext
+            w.Write((byte)0);
+            w.Write(0);
+            Nt("");
+            w.Write(0); // added bundles
+
+            long dataOffset = ms.Position;
+            w.Write(0L);
+            w.Write((long)encrypted.Length);
+            w.Write(encrypted);
+
+            long end = ms.Position;
+            ms.Position = dataOffsetPos;
+            w.Write(dataOffset);
+            w.Write(1);
+            ms.Position = end;
+        }
+
+        ms.Position = 0;
+        var mod = FbmodReader.Read(ms, "v8.fbmod", loadResourceData: true);
+        Assert.Equal(8u, mod.Version);
+        Assert.Equal(FbmodConstants.MaxBinaryVersion, 8u);
+        var ebx = Assert.Single(mod.Resources);
+        Assert.Equal(plain, ebx.Data);
+        Assert.False(FbmodCryptor.IsEncrypted(ebx.Data!));
+    }
 }

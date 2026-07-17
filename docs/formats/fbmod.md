@@ -27,7 +27,7 @@ Little-endian unless noted.
 | Field | Type | Notes |
 |-------|------|-------|
 | magic | u64 | `0x01005954534F5246` |
-| version | u32 | Open Frosty documents **1–5**; Madden/CFB forks observed up to **7** (resource table still compatible) |
+| version | u32 | Open Frosty documents **1–5**; Madden/CFB forks **6–7**; MMC **1.1.0.1+** writes **8** (encrypted payloads) |
 | dataOffset | i64 | Absolute file offset of data manifest table |
 | dataCount | i32 | Number of payload entries in the manifest |
 | profileName | length-prefixed string | `BinaryWriter.Write(string)` (7-bit length + bytes) |
@@ -42,6 +42,7 @@ Little-endian unless noted.
 5. Mod page link field
 6–7. Used by private Madden/College Football Frosty forks (not in CadeEvs 1.0.6.3).  
    Version **&gt; 5** adds a superBundle list on **Chunk** resources. Version **≥ 7** on CollegeFB27/Madden27 also inserts an **h64** (i64) after **h32** when the chunk has no custom handler. Header/details layout is otherwise the same as v5.
+8. MMC Editor / Mod Manager **1.1.0.1+**: same resource table as v7, but every data-section blob is **AES-256-CBC + HMAC-SHA256** protected (see [Encrypted payloads](#encrypted-payloads-v8--mmc-1101)). Older managers reject version 8.
 
 ## Mod details
 
@@ -145,12 +146,25 @@ At `dataOffset`:
 ```
 for i in 0 .. dataCount-1:
   offset: i64   // relative to start of payload region
-  size:   i64
+  size:   i64   // byte length of the blob as stored (encrypted length for v8)
 payload region starts at: dataOffset + dataCount * 16
 payload for index i: payloadBase + offset, length size
 ```
 
 Embedded resources 0–4 are typically Icon + Screenshot0..3.
+
+### Encrypted payloads (v8 / MMC 1.1.0.1+)
+
+When the blob begins with ASCII `FMENC001`, the stored payload is:
+
+```
+magic:      8 bytes  "FMENC001"
+iv:        16 bytes  random AES IV
+mac:       32 bytes  HMAC-SHA256(magic ‖ iv ‖ ciphertext)
+ciphertext: N bytes  AES-256-CBC PKCS7 of the original CAS/compressed bytes
+```
+
+Resource-table SHA1 and logical `size` still describe the **plaintext** compressed asset. FrostyConvert decrypts automatically in `FbmodReader` / the MMC import plugin. Keys are derived from fixed material in the MMC client (shared, not per-author).
 
 ## EBX payload note
 

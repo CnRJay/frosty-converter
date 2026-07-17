@@ -9,8 +9,9 @@ public sealed class FbmodReaderException : Exception
 }
 
 /// <summary>
-/// Standalone parser for Frosty <c>.fbmod</c> files (binary format v1–v5).
+/// Standalone parser for Frosty <c>.fbmod</c> files (binary format v1–v8).
 /// Does not require Frosty assemblies or game data.
+/// MMC 1.1.0.1+ (v8) payloads are decrypted via <see cref="FbmodCryptor"/> when present.
 /// </summary>
 public static class FbmodReader
 {
@@ -287,7 +288,10 @@ public static class FbmodReader
                 continue;
 
             reader.Position = abs;
-            resource.Data = reader.ReadBytes((int)size);
+            byte[] data = reader.ReadBytes((int)size);
+            // MMC 1.1.0.1+ encrypts each manifest blob (FMENC001 + AES-CBC + HMAC).
+            // Older plaintext payloads are returned unchanged.
+            resource.Data = FbmodCryptor.MaybeDecrypt(data);
         }
     }
 }

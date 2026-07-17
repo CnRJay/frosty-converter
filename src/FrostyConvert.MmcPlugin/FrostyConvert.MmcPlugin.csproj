@@ -10,6 +10,7 @@
     <RootNamespace>FrostyConvert.MmcPlugin</RootNamespace>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <!-- Prefer local MMC install; fall back to third_party/mmc-refs (compile-only copies). -->
+    <MmcEditorDir Condition="'$(MmcEditorDir)' == '' and Exists('d:\cfb27 mods\MMC_Editor_v1.1.0.1\FrostyCore.dll')">d:\cfb27 mods\MMC_Editor_v1.1.0.1</MmcEditorDir>
     <MmcEditorDir Condition="'$(MmcEditorDir)' == '' and Exists('d:\cfb27 mods\MMC_Editor_v1.1.0.0\FrostyCore.dll')">d:\cfb27 mods\MMC_Editor_v1.1.0.0</MmcEditorDir>
     <MmcRefsDir Condition="'$(MmcRefsDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\third_party\mmc-refs'))</MmcRefsDir>
     <_FrostyCore Condition="Exists('$(MmcEditorDir)\FrostyCore.dll')">$(MmcEditorDir)\FrostyCore.dll</_FrostyCore>
@@ -29,6 +30,7 @@
   <ItemGroup>
     <Compile Include="..\FrostyConvert.Core\IO\EndianBinaryReader.cs" Link="Core\EndianBinaryReader.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodConstants.cs" Link="Core\FbmodConstants.cs" />
+    <Compile Include="..\FrostyConvert.Core\Mod\FbmodCryptor.cs" Link="Core\FbmodCryptor.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodDetails.cs" Link="Core\FbmodDetails.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodFile.cs" Link="Core\FbmodFile.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodReader.cs" Link="Core\FbmodReader.cs" />
