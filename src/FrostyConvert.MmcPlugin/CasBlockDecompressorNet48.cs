@@ -34,7 +34,7 @@ public static class CasBlockDecompressorNet48
         return output.Length == 0 ? data : output.ToArray();
     }
 
-    private static bool LooksLikeCas(byte[] data)
+    public static bool LooksLikeCas(byte[] data)
     {
         int decomp = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
         // Per-block uncompressed size (texture mip blocks can be large)
