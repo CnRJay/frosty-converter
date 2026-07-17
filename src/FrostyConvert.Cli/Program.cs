@@ -151,9 +151,17 @@ internal static class Program
                 long outLen = new FileInfo(outputPath).Length;
                 Console.WriteLine($"Wrote FIFA Editor project: {outputPath} ({outLen:N0} bytes)");
                 Console.WriteLine($"  game={fifa.GameName} title={fifa.Details.Title}");
+                int brtEbx = fifa.Resources.Count(r => r.BrtAddition is { BrtNameHash: not 0 });
                 Console.WriteLine(
                     $"  written: ebx={writable.Ebx}  res={writable.Res}  " +
                     $"chunks={writable.Chunks}  decompress_errors={err}");
+                Console.WriteLine(
+                    $"  header: screenshots={fifa.Details.Screenshots.Count} locale={fifa.LocaleIniFiles.Count} " +
+                    $"initfs={fifa.InitFsFiles.Count} playerLua={fifa.PlayerLuaMods.Count} " +
+                    $"kitLua={fifa.PlayerKitLuaMods.Count} addedBundles={fifa.AddedBundles.Count}");
+                Console.WriteLine(
+                    $"  brt: ebxWithBrt={brtEbx}  collectors={fifa.Collectors.Count}  " +
+                    $"brtTables={fifa.BundleRefTables.Count}");
                 if (promote is not null)
                     Console.WriteLine($"  (includes {promote.PromotedCount} promoted TextureAssets for Data Explorer)");
 
@@ -163,7 +171,11 @@ internal static class Program
                     var check = FifaprojectReader.ReadSummary(outputPath);
                     Console.WriteLine(
                         $"  verify: chunks={check.ChunkCount} legacy={check.LegacyChunkCount} " +
-                        $"(added paths={check.LegacyAddedCount}) res={check.ResCount} ebx={check.EbxCount}");
+                        $"(added paths={check.LegacyAddedCount}) res={check.ResCount} ebx={check.EbxCount} " +
+                        $"ebxWithBrt={check.EbxWithBrtCount} bundles={check.AddedBundleCount}");
+                    Console.WriteLine(
+                        $"  verify header: shots={check.ScreenshotCount} locale={check.LocaleIniCount} " +
+                        $"initfs={check.InitFsCount} lua={check.PlayerLuaKeyCount}/{check.PlayerKitLuaKeyCount}");
                     foreach (var w in check.Warnings)
                         Console.WriteLine($"  verify warning: {w}");
 

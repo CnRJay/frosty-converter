@@ -96,41 +96,58 @@ public static class FifamodReader
         byte[] icon = iconLen > 0 ? reader.ReadBytes(iconLen) : Array.Empty<byte>();
 
         int screenshotCount = reader.Read7BitEncodedInt();
+        if (screenshotCount < 0 || screenshotCount > 64)
+            throw new FifamodReaderException($"Unreasonable screenshot count: {screenshotCount}");
+        var screenshots = new List<byte[]>(screenshotCount);
         for (int i = 0; i < screenshotCount; i++)
         {
             int n = reader.Read7BitEncodedInt();
-            if (n > 0)
-                stream.Position += n; // skip screenshot payloads
+            screenshots.Add(n > 0 ? reader.ReadBytes(n) : Array.Empty<byte>());
         }
 
         int localeCount = reader.Read7BitEncodedInt();
+        if (localeCount < 0 || localeCount > 10_000)
+            throw new FifamodReaderException($"Unreasonable locale.ini count: {localeCount}");
+        var localeIni = new List<FifamodLocaleIniFile>(localeCount);
         for (int i = 0; i < localeCount; i++)
         {
-            _ = reader.ReadLengthPrefixedString();
-            _ = reader.ReadLengthPrefixedString();
+            localeIni.Add(new FifamodLocaleIniFile
+            {
+                Description = reader.ReadLengthPrefixedString(),
+                Contents = reader.ReadLengthPrefixedString(),
+            });
         }
 
         int initFsCount = reader.Read7BitEncodedInt();
+        if (initFsCount < 0 || initFsCount > 100_000)
+            throw new FifamodReaderException($"Unreasonable initfs count: {initFsCount}");
+        var initFs = new List<FifamodInitFsFile>(initFsCount);
         for (int i = 0; i < initFsCount; i++)
         {
-            _ = reader.ReadLengthPrefixedString();
+            string name = reader.ReadLengthPrefixedString();
             int n = reader.Read7BitEncodedInt();
-            if (n > 0)
-                stream.Position += n;
+            byte[] data = n > 0 ? reader.ReadBytes(n) : Array.Empty<byte>();
+            initFs.Add(new FifamodInitFsFile { Name = name, Data = data });
         }
 
-        // Player lua + kit lua (count of keys, each with list of strings)
-        SkipSimpleLua(reader);
-        SkipSimpleLua(reader);
+        // Player lua + kit lua: free-form maps (FET new-format load uses version 100 → default branch)
+        var playerLua = ReadLuaModMap(reader);
+        var playerKitLua = ReadLuaModMap(reader);
 
         uint dataBaseOffset = reader.ReadUInt32();
 
         uint addedBundleCount = ReadUInt24(reader);
+        if (addedBundleCount > 100_000)
+            throw new FifamodReaderException($"Unreasonable added bundle count: {addedBundleCount}");
+        var addedBundles = new List<FifamodAddedBundle>((int)addedBundleCount);
         for (uint i = 0; i < addedBundleCount; i++)
         {
-            _ = reader.ReadLengthPrefixedString();
-            _ = reader.ReadUInt64(); // name hash
-            _ = reader.ReadUInt32(); // super bundle hash
+            addedBundles.Add(new FifamodAddedBundle
+            {
+                Name = reader.ReadLengthPrefixedString(),
+                NameHash = reader.ReadUInt64(),
+                SuperBundleHash = reader.ReadUInt32(),
+            });
         }
 
         var resources = new List<FifamodResource>();
@@ -145,12 +162,21 @@ public static class FifamodReader
             int length = reader.Read7BitEncodedInt();
             int originalSize = reader.Read7BitEncodedInt();
 
+            FifamodBrtAddition? brt = null;
             if (flags.HasFlag(FifamodEbxFlags.AddToBundleRefTable))
             {
-                _ = reader.ReadUInt32(); // brt name hash
-                _ = reader.ReadLengthPrefixedString(); // bundle ref path
+                uint brtHash = reader.ReadUInt32();
+                string brtPath = reader.ReadLengthPrefixedString();
+                string? parentPath = null;
                 if (flags.HasFlag(FifamodEbxFlags.HasParentBundleRef))
-                    _ = reader.ReadLengthPrefixedString();
+                    parentPath = reader.ReadLengthPrefixedString();
+                brt = new FifamodBrtAddition
+                {
+                    BrtNameHash = brtHash,
+                    BundleRefPath = brtPath,
+                    ParentBundleRefPath = parentPath,
+                    BundleRefOnly = flags.HasFlag(FifamodEbxFlags.BundleRefOnly),
+                };
             }
 
             ulong[] bundles = Array.Empty<ulong>();
@@ -173,6 +199,7 @@ public static class FifamodReader
                 UncompressedSize = originalSize,
                 AddedBundleHashes = bundles,
                 BundleAssignmentOnly = flags.HasFlag(FifamodEbxFlags.BundleAssignmentOnly),
+                BrtAddition = brt,
             });
         }
 
@@ -275,21 +302,33 @@ public static class FifamodReader
             });
         }
 
-        // collectors + bundle ref tables (skip payloads, keep parse position valid)
+        // Trailing collectors + BRT name table (ModWriter after chunk index, before data section)
         int collectorCount = reader.Read7BitEncodedInt();
+        if (collectorCount < 0 || collectorCount > 1_000_000)
+            throw new FifamodReaderException($"Unreasonable collector count: {collectorCount}");
+        var collectors = new List<FifamodCollectorEntry>(collectorCount);
         for (int i = 0; i < collectorCount; i++)
         {
-            _ = reader.ReadLengthPrefixedString();
-            _ = reader.ReadGuid();
-            _ = reader.ReadByte(); // bool
-            _ = reader.ReadUInt32();
+            collectors.Add(new FifamodCollectorEntry
+            {
+                CollectorEbxName = reader.ReadLengthPrefixedString(),
+                CollectorChunkId = reader.ReadGuid(),
+                IsPatch = reader.ReadByte() != 0,
+                Meta = reader.ReadUInt32(),
+            });
         }
 
         int brtCount = reader.Read7BitEncodedInt();
+        if (brtCount < 0 || brtCount > 1_000_000)
+            throw new FifamodReaderException($"Unreasonable BRT table count: {brtCount}");
+        var bundleRefTables = new List<FifamodBundleRefTableEntry>(brtCount);
         for (int i = 0; i < brtCount; i++)
         {
-            _ = reader.ReadUInt32();
-            _ = reader.ReadLengthPrefixedString();
+            bundleRefTables.Add(new FifamodBundleRefTableEntry
+            {
+                NameHash = reader.ReadUInt32(),
+                Name = reader.ReadLengthPrefixedString(),
+            });
         }
 
         if (loadResourceData)
@@ -356,9 +395,17 @@ public static class FifamodReader
                 CustomLink = customLink,
                 Icon = icon,
                 ScreenshotCount = screenshotCount,
+                Screenshots = screenshots,
             },
             DataBaseOffset = dataBaseOffset,
             Resources = resources,
+            Collectors = collectors,
+            BundleRefTables = bundleRefTables,
+            AddedBundles = addedBundles,
+            LocaleIniFiles = localeIni,
+            InitFsFiles = initFs,
+            PlayerLuaMods = playerLua,
+            PlayerKitLuaMods = playerKitLua,
             EbxCount = (int)ebxCount,
             ResCount = (int)resCount,
             ChunkCount = (int)chunkCount,
@@ -395,16 +442,28 @@ public static class FifamodReader
             $"Unable to decompress payload (csz={compressed.Length}, usz={expectedUncompressed}, head={SysConvert.ToHexString(compressed.AsSpan(0, Math.Min(8, compressed.Length)))}).");
     }
 
-    private static void SkipSimpleLua(EndianBinaryReader reader)
+    /// <summary>
+    /// Free-form lua mod map: count + (key, valueCount, values…)* — matches
+    /// <c>ModWriter.WritePlayerLuaMods</c> / new-format <c>LoadPlayerLuaModifications(..., 100)</c>.
+    /// </summary>
+    private static List<FifamodLuaModEntry> ReadLuaModMap(EndianBinaryReader reader)
     {
         int keys = reader.Read7BitEncodedInt();
+        if (keys < 0 || keys > 100_000)
+            throw new FifamodReaderException($"Unreasonable lua mod key count: {keys}");
+        var list = new List<FifamodLuaModEntry>(keys);
         for (int i = 0; i < keys; i++)
         {
-            _ = reader.ReadLengthPrefixedString();
+            string key = reader.ReadLengthPrefixedString();
             int n = reader.Read7BitEncodedInt();
+            if (n < 0 || n > 1_000_000)
+                throw new FifamodReaderException($"Unreasonable lua mod value count for '{key}': {n}");
+            var values = new string[n];
             for (int j = 0; j < n; j++)
-                _ = reader.ReadLengthPrefixedString();
+                values[j] = reader.ReadLengthPrefixedString();
+            list.Add(new FifamodLuaModEntry { Key = key, Values = values });
         }
+        return list;
     }
 
     private static uint ReadUInt24(EndianBinaryReader reader)

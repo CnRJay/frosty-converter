@@ -20,6 +20,7 @@ public sealed class FifamodDetails
     public string CustomLink { get; init; } = "";
     public byte[] Icon { get; init; } = Array.Empty<byte>();
     public int ScreenshotCount { get; init; }
+    public IReadOnlyList<byte[]> Screenshots { get; init; } = Array.Empty<byte[]>();
 }
 
 public sealed class FifamodResource
@@ -62,6 +63,12 @@ public sealed class FifamodResource
     public ulong[] AddedBundleHashes { get; init; } = Array.Empty<ulong>();
     public bool BundleAssignmentOnly { get; init; }
 
+    /// <summary>
+    /// Per-EBX Bundle Ref Table registration (shoes/kits/etc.). Written into .fifaproject so FET
+    /// re-export rebuilds BRTs; omitting this is a common cause of in-game load failures.
+    /// </summary>
+    public FifamodBrtAddition? BrtAddition { get; init; }
+
     public byte[]? CompressedData { get; set; }
     public byte[]? Data { get; set; }
     public bool Sha1MatchesCompressed { get; set; }
@@ -72,7 +79,11 @@ public sealed class FifamodResource
         {
             FifamodResourceKind.Ebx => EbxFlags.HasFlag(FifamodEbxFlags.IsAdded),
             FifamodResourceKind.Res => ResFlags.HasFlag(FifamodResFlags.IsAdded),
-            FifamodResourceKind.Chunk => ChunkFlags.HasFlag(FifamodChunkFlags.IsAdded),
+            // .fifamod never sets IsAdded (ModWriter); new legacy files only set IsLegacyAdded.
+            // Project load requires IsAdded so FET creates the chunk instead of looking it up.
+            FifamodResourceKind.Chunk =>
+                ChunkFlags.HasFlag(FifamodChunkFlags.IsAdded)
+                || ChunkFlags.HasFlag(FifamodChunkFlags.IsLegacyAdded),
             _ => false,
         };
 }
@@ -84,6 +95,65 @@ public enum FifamodResourceKind
     Chunk,
 }
 
+/// <summary>EBX registration into a Bundle Ref Table (from .fifamod index or project EBX flags).</summary>
+public sealed class FifamodBrtAddition
+{
+    public uint BrtNameHash { get; init; }
+    public string BundleRefPath { get; init; } = "";
+    /// <summary>Null means flag HasParentBundleRef is clear (field absent in stream).</summary>
+    public string? ParentBundleRefPath { get; init; }
+    public bool BundleRefOnly { get; init; }
+}
+
+/// <summary>
+/// Trailing collector footer entry on .fifamod (ModWriter). FET regenerates these on export from
+/// live legacy state; we preserve them for inspect / diagnostics.
+/// </summary>
+public sealed class FifamodCollectorEntry
+{
+    public string CollectorEbxName { get; init; } = "";
+    public Guid CollectorChunkId { get; init; }
+    public bool IsPatch { get; init; }
+    /// <summary>Second uint from ChunkCollectorAssets (super-bundle / collector meta).</summary>
+    public uint Meta { get; init; }
+}
+
+/// <summary>Trailing BRT name table on .fifamod (hash → asset path).</summary>
+public sealed class FifamodBundleRefTableEntry
+{
+    public uint NameHash { get; init; }
+    public string Name { get; init; } = "";
+}
+
+/// <summary>Added bundle from .fifamod index (ModWriter.EnumerateAddedBundles).</summary>
+public sealed class FifamodAddedBundle
+{
+    public string Name { get; init; } = "";
+    public ulong NameHash { get; init; }
+    public uint SuperBundleHash { get; init; }
+    /// <summary>Project-only field; mods do not store type — default 0.</summary>
+    public byte Type { get; init; }
+}
+
+public sealed class FifamodLocaleIniFile
+{
+    public string Description { get; init; } = "";
+    public string Contents { get; init; } = "";
+}
+
+public sealed class FifamodInitFsFile
+{
+    public string Name { get; init; } = "";
+    public byte[] Data { get; init; } = Array.Empty<byte>();
+}
+
+/// <summary>One key in PlayerLua / PlayerKitLua AllModifications map.</summary>
+public sealed class FifamodLuaModEntry
+{
+    public string Key { get; init; } = "";
+    public IReadOnlyList<string> Values { get; init; } = Array.Empty<string>();
+}
+
 public sealed class FifamodFile
 {
     public required string Path { get; init; }
@@ -93,6 +163,13 @@ public sealed class FifamodFile
     public FifamodDetails Details { get; init; } = new();
     public long DataBaseOffset { get; init; }
     public IReadOnlyList<FifamodResource> Resources { get; init; } = Array.Empty<FifamodResource>();
+    public IReadOnlyList<FifamodCollectorEntry> Collectors { get; init; } = Array.Empty<FifamodCollectorEntry>();
+    public IReadOnlyList<FifamodBundleRefTableEntry> BundleRefTables { get; init; } = Array.Empty<FifamodBundleRefTableEntry>();
+    public IReadOnlyList<FifamodAddedBundle> AddedBundles { get; init; } = Array.Empty<FifamodAddedBundle>();
+    public IReadOnlyList<FifamodLocaleIniFile> LocaleIniFiles { get; init; } = Array.Empty<FifamodLocaleIniFile>();
+    public IReadOnlyList<FifamodInitFsFile> InitFsFiles { get; init; } = Array.Empty<FifamodInitFsFile>();
+    public IReadOnlyList<FifamodLuaModEntry> PlayerLuaMods { get; init; } = Array.Empty<FifamodLuaModEntry>();
+    public IReadOnlyList<FifamodLuaModEntry> PlayerKitLuaMods { get; init; } = Array.Empty<FifamodLuaModEntry>();
     public int EbxCount { get; init; }
     public int ResCount { get; init; }
     public int ChunkCount { get; init; }

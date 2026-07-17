@@ -49,6 +49,14 @@ public sealed class FifamodInspectReport
             Notes = mod.Notes.ToList(),
         };
 
+        int brtEbx = mod.Resources.Count(r => r.Kind == FifamodResourceKind.Ebx && r.BrtAddition is { BrtNameHash: not 0 });
+        if (mod.Collectors.Count > 0)
+            report.Notes.Add($"Legacy collectors in mod footer: {mod.Collectors.Count}");
+        if (mod.BundleRefTables.Count > 0)
+            report.Notes.Add($"Bundle ref tables in mod footer: {mod.BundleRefTables.Count}");
+        if (brtEbx > 0)
+            report.Notes.Add($"EBX with per-asset BRT registration: {brtEbx}");
+
         int index = 0;
         foreach (var r in mod.Resources)
         {

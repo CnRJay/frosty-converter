@@ -15,14 +15,22 @@ public static class FifaprojectReader
         public uint GameVersion { get; set; }
         public string Title { get; set; } = "";
         public int AddedBundleCount { get; set; }
+        public int ScreenshotCount { get; set; }
+        public int LocaleIniCount { get; set; }
+        public int InitFsCount { get; set; }
+        public int PlayerLuaKeyCount { get; set; }
+        public int PlayerKitLuaKeyCount { get; set; }
         public int ChunkCount { get; set; }
         public int LegacyChunkCount { get; set; }
         public int LegacyAddedCount { get; set; }
         public int ResCount { get; set; }
         public int EbxCount { get; set; }
+        /// <summary>EBX entries that carry Bundle Ref Table registration fields.</summary>
+        public int EbxWithBrtCount { get; set; }
         public List<string> SampleLegacyPaths { get; } = new();
         public List<string> SampleResNames { get; } = new();
         public List<string> SampleEbxNames { get; } = new();
+        public List<string> SampleBrtPaths { get; } = new();
         public List<string> Warnings { get; } = new();
     }
 
@@ -66,20 +74,33 @@ public static class FifaprojectReader
         if (iconLen > 0)
             r.BaseStream.Position += iconLen;
 
-        int shots = r.Read7BitEncodedInt();
-        for (int i = 0; i < shots; i++)
+        s.ScreenshotCount = r.Read7BitEncodedInt();
+        for (int i = 0; i < s.ScreenshotCount; i++)
         {
             int n = r.Read7BitEncodedInt();
             r.BaseStream.Position += n;
         }
 
-        // locale, initfs, player lua, player kit lua — our writer always writes count 0
-        for (int i = 0; i < 4; i++)
+        // locale.ini
+        s.LocaleIniCount = r.Read7BitEncodedInt();
+        for (int i = 0; i < s.LocaleIniCount; i++)
         {
-            int c = r.Read7BitEncodedInt();
-            if (c != 0)
-                s.Warnings.Add($"Expected empty header table #{i}, got count={c} (parser may desync).");
+            _ = r.ReadLengthPrefixedString();
+            _ = r.ReadLengthPrefixedString();
         }
+
+        // initfs
+        s.InitFsCount = r.Read7BitEncodedInt();
+        for (int i = 0; i < s.InitFsCount; i++)
+        {
+            _ = r.ReadLengthPrefixedString();
+            int n = r.Read7BitEncodedInt();
+            r.BaseStream.Position += n;
+        }
+
+        // player lua + kit lua free-form maps (new-format / version 100 layout)
+        s.PlayerLuaKeyCount = SkipLuaModMap(r);
+        s.PlayerKitLuaKeyCount = SkipLuaModMap(r);
 
         s.AddedBundleCount = (int)ReadUInt24(r);
         for (int i = 0; i < s.AddedBundleCount; i++)
@@ -235,10 +256,13 @@ public static class FifaprojectReader
 
             if (hasBrt)
             {
+                s.EbxWithBrtCount++;
                 _ = r.ReadUInt32();
-                _ = r.ReadLengthPrefixedString();
+                string brtPath = r.ReadLengthPrefixedString();
                 if (hasParent)
                     _ = r.ReadLengthPrefixedString();
+                if (s.SampleBrtPaths.Count < 8)
+                    s.SampleBrtPaths.Add($"{name} → {brtPath}");
             }
 
             if ((ebxFlags & 0x10) != 0)
@@ -270,6 +294,19 @@ public static class FifaprojectReader
         int n = r.Read7BitEncodedInt();
         if (n != 0)
             throw new InvalidDataException("Linked assets present; offline skip not fully implemented.");
+    }
+
+    private static int SkipLuaModMap(EndianBinaryReader r)
+    {
+        int keys = r.Read7BitEncodedInt();
+        for (int i = 0; i < keys; i++)
+        {
+            _ = r.ReadLengthPrefixedString();
+            int n = r.Read7BitEncodedInt();
+            for (int j = 0; j < n; j++)
+                _ = r.ReadLengthPrefixedString();
+        }
+        return keys;
     }
 
     private static uint ReadUInt24(EndianBinaryReader r)

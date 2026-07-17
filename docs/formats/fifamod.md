@@ -38,7 +38,15 @@ u24 count, then each:
 | relativeOffset | 7-bit long |
 | length | 7-bit int (compressed size) |
 | originalSize | 7-bit int |
-| optional BRT / added bundles | depending on flags |
+| optional BRT | if `AddToBundleRefTable`: u32 hash, path string, optional parent path (`HasParentBundleRef`) |
+| optional added bundles | if `HasAddedBundles`: count + u64 hashes |
+
+After RES + Chunk indexes (before the data section):
+
+| Field | Type |
+|-------|------|
+| collectors | 7-bit count + each (collector EBX name, collector chunk GUID, bool patch, u32 meta) |
+| BRT name table | 7-bit count + each (u32 hash, name string) |
 
 Absolute payload offset = `dataBaseOffset + relativeOffset`.
 

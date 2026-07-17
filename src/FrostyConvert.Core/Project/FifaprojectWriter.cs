@@ -44,8 +44,14 @@ public static class FifaprojectWriter
 
         WriteHeader(w, mod);
 
-        // Added bundles (not tracked offline)
-        WriteUInt24(w, 0);
+        // Added bundles — FET project layout: name, superBundle hash u32, type u8
+        WriteUInt24(w, (uint)mod.AddedBundles.Count);
+        foreach (var b in mod.AddedBundles)
+        {
+            w.WriteLengthPrefixedString(b.Name);
+            w.WriteUInt32(b.SuperBundleHash);
+            w.WriteByte(b.Type);
+        }
 
         bool h32IsU64 = mod.GameName.StartsWith("FC26", StringComparison.OrdinalIgnoreCase)
                         || mod.GameName.StartsWith("FC 26", StringComparison.OrdinalIgnoreCase)
@@ -165,11 +171,53 @@ public static class FifaprojectWriter
             w.Write7BitEncodedInt(0);
         }
 
-        w.Write7BitEncodedInt(0); // screenshots
-        w.Write7BitEncodedInt(0); // locale ini
-        w.Write7BitEncodedInt(0); // initfs
-        w.Write7BitEncodedInt(0); // player lua
-        w.Write7BitEncodedInt(0); // player kit lua
+        // Screenshots (same as EditorProject.WriteHeader)
+        IReadOnlyList<byte[]> shots = d.Screenshots;
+        w.Write7BitEncodedInt(shots.Count);
+        foreach (byte[] shot in shots)
+        {
+            if (shot is { Length: > 0 })
+            {
+                w.Write7BitEncodedInt(shot.Length);
+                w.WriteBytes(shot);
+            }
+            else
+            {
+                w.Write7BitEncodedInt(0);
+            }
+        }
+
+        w.Write7BitEncodedInt(mod.LocaleIniFiles.Count);
+        foreach (var locale in mod.LocaleIniFiles)
+        {
+            w.WriteLengthPrefixedString(locale.Description);
+            w.WriteLengthPrefixedString(locale.Contents);
+        }
+
+        w.Write7BitEncodedInt(mod.InitFsFiles.Count);
+        foreach (var file in mod.InitFsFiles)
+        {
+            w.WriteLengthPrefixedString(file.Name);
+            w.Write7BitEncodedInt(file.Data.Length);
+            if (file.Data.Length > 0)
+                w.WriteBytes(file.Data);
+        }
+
+        // Free-form maps (new-format load uses version 100 → default branch)
+        WriteLuaModMap(w, mod.PlayerLuaMods);
+        WriteLuaModMap(w, mod.PlayerKitLuaMods);
+    }
+
+    private static void WriteLuaModMap(EndianBinaryWriter w, IReadOnlyList<FifamodLuaModEntry> entries)
+    {
+        w.Write7BitEncodedInt(entries.Count);
+        foreach (var e in entries)
+        {
+            w.WriteLengthPrefixedString(e.Key);
+            w.Write7BitEncodedInt(e.Values.Count);
+            foreach (string v in e.Values)
+                w.WriteLengthPrefixedString(v);
+        }
     }
 
     private static void WriteChunkEntry(
@@ -300,11 +348,20 @@ public static class FifaprojectWriter
     {
         int originalSize = e.UncompressedSize > 0 ? e.UncompressedSize : payload.Length;
         bool isAdded = e.IsAdded;
+        FifamodBrtAddition? brt = e.BrtAddition is { BrtNameHash: not 0 } b ? b : null;
 
         w.WriteLengthPrefixedString(e.Name);
         var flags = FifamodEbxFlags.IsDirectlyModified;
         if (isAdded)
             flags |= FifamodEbxFlags.IsAdded;
+        if (brt is not null)
+        {
+            flags |= FifamodEbxFlags.AddToBundleRefTable;
+            if (brt.ParentBundleRefPath is not null)
+                flags |= FifamodEbxFlags.HasParentBundleRef;
+            if (brt.BundleRefOnly)
+                flags |= FifamodEbxFlags.BundleRefOnly;
+        }
         if (e.AddedBundleHashes.Length > 0)
             flags |= FifamodEbxFlags.HasAddedBundles;
         if (e.BundleAssignmentOnly)
@@ -317,9 +374,19 @@ public static class FifaprojectWriter
             w.WriteGuid(e.EbxGuid != Guid.Empty ? e.EbxGuid : Guid.NewGuid());
         }
 
+        // Order matches EditorProject.Save / Load for directly-modified EBX:
+        // gameVersion, AssetSha1AtImport, [BRT], [added bundles], sha1, sizes, payload.
         WriteUInt24(w, mod.GameVersion);
         if (!isAdded)
             w.WriteBytes(new byte[20]);
+
+        if (brt is not null)
+        {
+            w.WriteUInt32(brt.BrtNameHash);
+            w.WriteLengthPrefixedString(brt.BundleRefPath ?? "");
+            if (brt.ParentBundleRefPath is not null)
+                w.WriteLengthPrefixedString(brt.ParentBundleRefPath);
+        }
 
         if (e.AddedBundleHashes.Length > 0)
         {

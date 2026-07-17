@@ -91,9 +91,13 @@ Invalid guard bits in codec header: expected 7, got 0x0
 
 ## Limits
 
+See [formats/fifamod-to-fifaproject.md](formats/fifamod-to-fifaproject.md) for the full FET field map.
+
 - Offline conversion cannot fill `AssetSha1AtImport` from the live game (zeros are written). FET still loads modified data; out-of-date checks may warn.
-- Chunk/res entries are written when present; complex legacy/collector cases may need a re-save inside FET.
-- Password-locked mods are not supported yet.
+- **Header extras** (screenshots, locale.ini, initfs, player/kit lua, added bundles) and **per-EBX BRT** are preserved 1:1.
+- Trailing mod footer collectors/BRT name lists are parsed for inspect; FET regenerates them on export after a live **File → Save**.
+- Linked-asset graphs and password-locked mods are not supported offline.
+- Always **File → Save** in FET after opening a recovered project, then export a **new** `.fifamod` before testing in Mod Manager.
 
 ## Related docs
 
