@@ -41,7 +41,7 @@ FrostyConvert treats a chunk as added when:
 | EBX/Res `IsAdded` when flag clear | Mod list = modified set; TOC membership unknown offline |
 | Exact FET tool version bytes | Written as `0.1.0.0` |
 | Collectors / BRT name footers on project | Project format has no trailing tables; export regenerates them |
-| Password-locked mods | Not supported |
+| Password-locked mods (FMT Pro) | Detected via header/decompress heuristics; cannot unlock without author password/key |
 
 ## After convert (required for best fidelity)
 

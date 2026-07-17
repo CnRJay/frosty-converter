@@ -11,6 +11,7 @@ using Frosty.Core;
 using Frosty.Core.Handlers;
 using Frosty.Core.Legacy;
 using Frosty.Core.Windows;
+using FrostyConvert.Core.Convert;
 using FrostyConvert.Core.Mod;
 using FrostySdk;
 using FrostySdk.IO;
@@ -139,6 +140,14 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
         int dirty = 0;
         try { dirty = (int)App.AssetManager.GetDirtyCount(); } catch { /* older MMC */ }
 
+        FbmodImportReadiness? readiness = null;
+        try
+        {
+            var modSnap = FbmodReader.Read(path, loadResourceData: false);
+            readiness = FbmodImportReadiness.Create(modSnap, ok, fail, okEbx, okRes, okChunk, okBundle, okLegacy);
+        }
+        catch { /* non-fatal */ }
+
         string summary =
             $"Import finished.\n\n" +
             $"OK: {ok}  (ebx={okEbx}, res={okRes}, chunk={okChunk}, bundle={okBundle}, handler={okLegacy})\n" +
@@ -147,7 +156,9 @@ public sealed class ImportFbmodMenuExtension : MenuExtension
             $"Dirty assets now: {dirty}\n\n" +
             "Data Explorer only lists EBX. Res/chunk-only texture mods appear under " +
             "Show Modified after we link each Res to its TextureAsset.\n\n" +
-            "Next: File → Save As… a new .fbproject, then confirm Modified shows assets.";
+            "REQUIRED: File → Save As… a NEW .fbproject, then export a new .fbmod to test in Mod Manager.";
+        if (readiness != null)
+            summary += "\n\n" + readiness.ToText();
         if (errors.Count > 0)
             summary += "\n\nDetails:\n" + string.Join("\n", errors.Take(24));
         if (errors.Count > 24)

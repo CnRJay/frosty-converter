@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Compile Include="..\FrostyConvert.Core\IO\EndianBinaryReader.cs" Link="Core\EndianBinaryReader.cs" />
+    <Compile Include="..\FrostyConvert.Core\Convert\FbmodImportReadiness.cs" Link="Core\FbmodImportReadiness.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodConstants.cs" Link="Core\FbmodConstants.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodCryptor.cs" Link="Core\FbmodCryptor.cs" />
     <Compile Include="..\FrostyConvert.Core\Mod\FbmodDetails.cs" Link="Core\FbmodDetails.cs" />

@@ -1,3 +1,4 @@
+using FrostyConvert.Core.Convert;
 using FrostyConvert.Core.FifaMod;
 using FrostyConvert.Core.Project;
 
@@ -33,6 +34,21 @@ public class FifamodReaderTests
     {
         Assert.Equal(0x50544546u, FifaprojectWriter.MagicLe);
         Assert.Equal(2, FifaprojectWriter.ProjectVersion);
+    }
+
+    [Fact]
+    public void ConversionReadiness_EmptyProject_IsBlocking()
+    {
+        var mod = new FifamodFile
+        {
+            Path = "empty.fifamod",
+            GameName = "FC26",
+            Resources = Array.Empty<FifamodResource>(),
+        };
+        var r = ConversionReadiness.ForFifamod(mod, 0, 0, 0, 0);
+        Assert.False(r.Success);
+        Assert.NotEmpty(r.Blocking);
+        Assert.Contains(r.NextSteps, s => s.Contains("Save", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

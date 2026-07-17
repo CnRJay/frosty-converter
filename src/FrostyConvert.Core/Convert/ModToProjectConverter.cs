@@ -26,7 +26,11 @@ public static class ModToProjectConverter
 
         if (mod.Format != FbmodFormatKind.Binary)
         {
-            report.Errors.Add("Legacy .fbmod format is not supported for conversion yet. Use a binary Frosty mod (magic FROSTY v1–v5).");
+            report.Errors.Add(
+                "Legacy (DbObject) .fbmod is not supported offline. " +
+                "Open the original project in MMC Editor and export a binary .fbmod (v5+), " +
+                "or use Tools → Import Frosty Mod on a binary export. " +
+                "Pre-binary Frosty archive mods cannot be recovered by this tool.");
             report.Success = false;
             return (new ProjectDocument(), report);
         }

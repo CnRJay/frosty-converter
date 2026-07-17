@@ -9,7 +9,7 @@ Ground truth: MMC Editor **1.1.0.1**
 - `Frosty.Core.Handlers.LegacyCustomActionHandler`
 - `FrostySdk.Managers.AssetManager` (`Add*` / `Modify*`)
 
-Plugin version: **1.0.7+**
+Plugin version: **1.0.8+**
 
 ## Parse (= `FrostyModReader` + decrypt)
 

@@ -1,3 +1,4 @@
+using FrostyConvert.Core.Convert;
 using FrostyConvert.Core.FifaMod;
 using FrostyConvert.Core.Legacy;
 using FrostyConvert.Core.Project;
@@ -246,10 +247,16 @@ internal sealed class MainForm : Form
             AppendLog(result.Log);
             if (result.Success)
             {
-                SetStatus("Done — open the .fifaproject in FIFA Editor Tool.", isError: false);
+                SetStatus("Done — open project in FET, load game, Save, then re-export.", isError: false);
                 MessageBox.Show(
                     this,
-                    $"Wrote:\n{output}\n\nNext: open FIFA Editor Tool, load the game, then File → Open Project.",
+                    $"Wrote:\n{output}\n\n" +
+                    "Required next steps:\n" +
+                    "1. Open FIFA Editor Tool and load the matching game\n" +
+                    "2. File → Open Project → this .fifaproject\n" +
+                    "3. File → Save (rebuilds collectors / live types)\n" +
+                    "4. Export a NEW .fifamod and test in Mod Manager\n\n" +
+                    (result.ReadinessText ?? ""),
                     "Conversion complete",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -336,9 +343,14 @@ internal sealed class MainForm : Form
             return ConvertResult.Fail($"Project verify failed (may not load in FET): {ex.Message}", log.ToString());
         }
 
+        var readiness = ConversionReadiness.ForFifamod(fifa, writable.Ebx, writable.Res, writable.Chunks, err);
         log.AppendLine();
-        log.AppendLine("Next: FIFA Editor Tool → load game → File → Open Project → this .fifaproject");
-        return ConvertResult.Ok(log.ToString());
+        log.AppendLine(readiness.ToText());
+
+        if (!readiness.Success)
+            return ConvertResult.Fail(readiness.Blocking.FirstOrDefault() ?? "Readiness check failed.", log.ToString(), readiness.ToText());
+
+        return ConvertResult.Ok(log.ToString(), readiness.ToText());
     }
 
     private void SetBusy(bool busy)
@@ -376,9 +388,11 @@ internal sealed class MainForm : Form
         public bool Success { get; init; }
         public string Log { get; init; } = "";
         public string? ErrorMessage { get; init; }
+        public string? ReadinessText { get; init; }
 
-        public static ConvertResult Ok(string log) => new() { Success = true, Log = log };
-        public static ConvertResult Fail(string error, string log) =>
-            new() { Success = false, ErrorMessage = error, Log = log };
+        public static ConvertResult Ok(string log, string? readiness = null) =>
+            new() { Success = true, Log = log, ReadinessText = readiness };
+        public static ConvertResult Fail(string error, string log, string? readiness = null) =>
+            new() { Success = false, ErrorMessage = error, Log = log, ReadinessText = readiness };
     }
 }

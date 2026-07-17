@@ -132,9 +132,10 @@ public static class FifaprojectWriter
     {
         w.WriteUInt32(MagicLe);
         w.WriteByte(ProjectVersion);
-        w.WriteByte(0); // tool major
+        // Tool version stamped as FrostyConvert release (major.minor.build.revision)
         w.WriteByte(1);
         w.WriteByte(0);
+        w.WriteByte(8);
         w.WriteByte(0);
 
         w.WriteLengthPrefixedString(mod.GameName);

@@ -215,8 +215,9 @@ internal static class Program
                 }
 
                 Console.WriteLine();
-                Console.WriteLine("  Next: open FIFA Editor Tool → load the game → File → Open Project → this .fifaproject");
-                Console.WriteLine("  Then File → Save to re-serialize with live types (same idea as MMC import).");
+                var readiness = ConversionReadiness.ForFifamod(fifa, writable.Ebx, writable.Res, writable.Chunks, err);
+                Console.WriteLine(readiness.ToText());
+                Console.WriteLine();
 
                 if (reportPath is not null)
                 {
@@ -226,6 +227,9 @@ internal static class Program
                         Directory.CreateDirectory(reportDir);
                     File.WriteAllText(reportPath, rep.ToJson(), Encoding.UTF8);
                 }
+
+                if (!readiness.Success)
+                    return ExitPartial;
 
                 if (writable.Ebx + writable.Res + writable.Chunks == 0)
                 {
@@ -239,6 +243,16 @@ internal static class Program
 
             var conv = ModToProjectConverter.ConvertToFile(inputPath, outputPath, oodlePath);
             Console.WriteLine(json ? conv.ToJson() : conv.ToText());
+
+            FbmodFile? fbmodForReady = null;
+            try { fbmodForReady = FbmodReader.Read(inputPath, loadResourceData: false); }
+            catch { /* ignore */ }
+            if (fbmodForReady is not null)
+            {
+                var ready = ConversionReadiness.ForOfflineFbmod(fbmodForReady, conv);
+                Console.WriteLine();
+                Console.WriteLine(ready.ToText());
+            }
 
             if (reportPath is not null)
             {
@@ -279,6 +293,16 @@ internal static class Program
                 || w.Contains("failed", StringComparison.OrdinalIgnoreCase));
             if (hardWarnings)
                 return ExitPartial;
+            // Offline path always recommend plugin — ExitPartial if only offline inventory
+            if (fbmodForReady is { Format: FbmodFormatKind.Binary } &&
+                (inputPath.Contains("CollegeFB", StringComparison.OrdinalIgnoreCase) ||
+                 inputPath.Contains("Madden", StringComparison.OrdinalIgnoreCase) ||
+                 (fbmodForReady.ProfileName?.Contains("College", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                 (fbmodForReady.ProfileName?.Contains("Madden", StringComparison.OrdinalIgnoreCase) ?? false)))
+            {
+                Console.Error.WriteLine(
+                    "note: for CFB/Madden editing use MMC plugin import (offline .fbproject is limited for RIFF).");
+            }
             return ExitOk;
         }
 

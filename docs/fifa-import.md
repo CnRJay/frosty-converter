@@ -96,7 +96,9 @@ See [formats/fifamod-to-fifaproject.md](formats/fifamod-to-fifaproject.md) for t
 - Offline conversion cannot fill `AssetSha1AtImport` from the live game (zeros are written). FET still loads modified data; out-of-date checks may warn.
 - **Header extras** (screenshots, locale.ini, initfs, player/kit lua, added bundles) and **per-EBX BRT** are preserved 1:1.
 - Trailing mod footer collectors/BRT name lists are parsed for inspect; FET regenerates them on export after a live **File → Save**.
-- Linked-asset graphs and password-locked mods are not supported offline.
+- Linked-asset graphs are rebuilt by FET after **File → Save** with the game loaded (not stored in `.fifamod`).
+- **Password-locked** mods (FMT Pro) are detected when possible but **cannot be unlocked** without the author’s password — request an unlocked export.
+- CLI/GUI print a **readiness score** and required next steps after convert.
 - Always **File → Save** in FET after opening a recovered project, then export a **new** `.fifamod` before testing in Mod Manager.
 
 ## Related docs

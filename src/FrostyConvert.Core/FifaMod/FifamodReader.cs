@@ -65,14 +65,35 @@ public static class FifamodReader
             stream.Position = 0;
             ulong old = reader.ReadUInt64();
             if (old == FifamodConstants.OldMagic)
-                throw new FifamodReaderException("Legacy (pre-FETM) fifamod format is not supported yet.");
+                throw new FifamodReaderException(
+                    "Legacy (pre-FETM) fifamod is not supported. Open the original project in FIFA Editor Tool " +
+                    "and re-export a modern FETM .fifamod, or ask the author for an unlocked export.");
             throw new FifamodReaderException(
                 $"Not a .fifamod (expected FETM magic 0x{FifamodConstants.MagicLe:X8}, got 0x{magic:X8}).");
         }
 
         // Official layout: byte modVersion, length-prefixed game name, u24 gameVersion
         byte modVersion = reader.ReadByte();
-        string gameName = reader.ReadLengthPrefixedString();
+        // FMT Pro password-lock has been observed to use non-zero high bits / unusual version markers.
+        // If the following string read fails or is empty while file is large, treat as locked/corrupt.
+        string gameName;
+        try
+        {
+            gameName = reader.ReadLengthPrefixedString();
+        }
+        catch (Exception ex)
+        {
+            throw new FifamodReaderException(
+                "Failed to read .fifamod header after magic. The file may be password-locked (FMT Pro), " +
+                "truncated, or corrupt. FrostyConvert cannot unlock password-protected mods without the author's password.",
+                ex);
+        }
+        if (string.IsNullOrEmpty(gameName) && stream.Length > 256)
+        {
+            notes.Add(
+                "Empty game name with large file — possible password-locked or non-standard .fifamod. " +
+                "If convert fails, ask the author for an unlocked export.");
+        }
         uint gameVersion = ReadUInt24(reader);
 
         string title = reader.ReadLengthPrefixedString();
@@ -331,15 +352,19 @@ public static class FifamodReader
             });
         }
 
+        int decompressErrors = 0;
+        int withPayload = 0;
         if (loadResourceData)
         {
             foreach (var res in resources)
             {
                 if (res.CompressedSize <= 0)
                     continue;
+                withPayload++;
                 if (res.FileOffset < 0 || res.FileOffset + res.CompressedSize > stream.Length)
                 {
                     res.DecompressError = "Compressed range out of file bounds.";
+                    decompressErrors++;
                     continue;
                 }
 
@@ -363,10 +388,20 @@ public static class FifamodReader
                 catch (Exception ex)
                 {
                     res.DecompressError = ex.Message;
+                    decompressErrors++;
                     if (compressed.Length == res.UncompressedSize)
                         res.Data = compressed;
                 }
             }
+        }
+
+        bool suspectLock = notes.Any(n =>
+            n.Contains("password-locked", StringComparison.OrdinalIgnoreCase));
+        if (withPayload > 4 && decompressErrors * 2 >= withPayload)
+        {
+            suspectLock = true;
+            notes.Add(
+                "High decompress failure rate — possible password-locked (FMT Pro) or corrupt payloads.");
         }
 
         return new FifamodFile
@@ -410,6 +445,7 @@ public static class FifamodReader
             ResCount = (int)resCount,
             ChunkCount = (int)chunkCount,
             Notes = notes,
+            SuspectedPasswordLock = suspectLock,
         };
     }
 

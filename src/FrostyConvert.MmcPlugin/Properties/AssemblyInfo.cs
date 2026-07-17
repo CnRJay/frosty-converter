@@ -4,5 +4,5 @@ using FrostyConvert.MmcPlugin;
 // Required for Frosty/MMC PluginManager to discover and register the menu item.
 [assembly: PluginDisplayName("FrostyConvert Fbmod Import")]
 [assembly: PluginAuthor("FrostyConvert")]
-[assembly: PluginVersion("1.0.7.0")]
+[assembly: PluginVersion("1.0.8.0")]
 [assembly: RegisterMenuExtension(typeof(ImportFbmodMenuExtension))]

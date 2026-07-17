@@ -164,8 +164,16 @@ Put real mods under `tests/fixtures/` for local testing. That folder is gitignor
 
 ## License
 
-Tool code in this repository: **TBD** (set by the project owner before release).
+Tool code in this repository is released under the **MIT License** (see `LICENSE` if present; otherwise treat as MIT: free to use, modify, and redistribute with attribution).
 
 Format knowledge draws on public Frosty Toolsuite structure ([CadeEvs/FrostyToolsuite](https://github.com/CadeEvs/FrostyToolsuite), CC BY-NC-ND 4.0). This project reimplements standalone parsers and does not redistribute modified Frosty sources.
 
 Oodle is a product of RAD Game Tools / Epic. Use of `oodle-data-shared.dll` follows Epic’s Unreal Engine / OodleUE terms — see `third_party/oodle/README.md`.
+
+## After convert (required)
+
+**FIFA:** Open recovered `.fifaproject` in FET with the game loaded → **File → Save** → export a **new** `.fifamod` → test that export.
+
+**MMC:** Plugin import with profile loaded → **File → Save As** a new `.fbproject` → export mod from MMC → test in Mod Manager.
+
+Skipping **Save** is the most common cause of “works in editor, broken in game.”

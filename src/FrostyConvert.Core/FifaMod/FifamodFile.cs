@@ -174,4 +174,10 @@ public sealed class FifamodFile
     public int ResCount { get; init; }
     public int ChunkCount { get; init; }
     public List<string> Notes { get; init; } = new();
+
+    /// <summary>
+    /// True when header heuristics suggest FMT Pro password-lock or unreadable payload layout.
+    /// Not a cryptographic guarantee — only a user-facing signal.
+    /// </summary>
+    public bool SuspectedPasswordLock { get; init; }
 }
