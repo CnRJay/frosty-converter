@@ -119,7 +119,9 @@ internal static class Program
                         PathFilter = textureFilter ?? "",
                         MaxCount = textureMax,
                     });
-                    extra = promote.Resources;
+                    // Never abort convert when promote finds nothing (scoreboards, faces, etc.).
+                    if (promote.PromotedCount > 0)
+                        extra = promote.Resources;
                     Console.WriteLine(
                         $"Promote → Data Explorer TextureAssets: promoted={promote.PromotedCount} " +
                         $"(ddsCandidates={promote.CandidateCount}, wrappedRes={promote.WrappedExistingRes}, " +
@@ -137,10 +139,11 @@ internal static class Program
                         Console.WriteLine($"  + {n}");
                     foreach (var e in promote.Errors)
                         Console.WriteLine($"  promote: {e}");
-                    if (promote.PromotedCount == 0 && promote.Errors.Count > 0)
+                    if (promote.PromotedCount == 0)
                     {
-                        Console.Error.WriteLine("error: texture promotion produced no assets.");
-                        return ExitFailure;
+                        Console.WriteLine(
+                            "  promote: nothing to promote — writing normal project " +
+                            "(omit --promote-legacy-textures unless the mod has crest/UI .dds).");
                     }
                 }
 

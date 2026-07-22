@@ -17,8 +17,9 @@ Quick start (GUI)
 
 2. Double-click FrostyConvert.FifaGui.exe
 
-3. Browse to a .fifamod (or drag-and-drop), optionally check "Promote legacy
-   textures", then click Convert.
+3. Browse to a .fifamod (or drag-and-drop), click Convert.
+   Leave "promote legacy .dds" unchecked unless this is a crest/UI pack
+   with standalone .dds files (faces, scoreboards, gameplay do not need it).
 
 4. Open FIFA Editor Tool, load the matching game (e.g. FC26).
 

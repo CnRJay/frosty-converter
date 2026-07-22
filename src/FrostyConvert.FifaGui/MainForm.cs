@@ -52,10 +52,14 @@ internal sealed class MainForm : Form
 
         _promoteTextures = new CheckBox
         {
-            Text = "Promote legacy textures to Data Explorer (recommended for crest/UI mods)",
+            // Optional: only for crest/UI mods with standalone legacy .dds.
+            // Default off — most mods (faces, scoreboards, gameplay) convert without it,
+            // and promote used to hard-fail when no Texture RES template / DDS existed.
+            Text = "Optional: promote legacy .dds → Data Explorer (crest/UI only)",
             AutoSize = true,
             Location = new Point(16, 208),
             ForeColor = Color.FromArgb(40, 40, 40),
+            Checked = false,
         };
 
         _convertButton = new Button
@@ -307,15 +311,22 @@ internal sealed class MainForm : Form
                 PathFilter = "",
                 MaxCount = 0,
             });
-            extra = promote.Resources;
+            // Never abort conversion when promote finds nothing — the base .fifamod
+            // project is still valid (faces, scoreboards, EBX-only mods, etc.).
+            if (promote.PromotedCount > 0)
+                extra = promote.Resources;
             log.AppendLine(
                 $"promote: {promote.PromotedCount} TextureAssets " +
                 $"(ddsCandidates={promote.CandidateCount}, errors={promote.SkippedErrors})");
             foreach (var e in promote.Errors.Take(8))
                 log.AppendLine($"  promote: {e}");
-
-            if (promote.PromotedCount == 0 && promote.Errors.Count > 0)
-                return ConvertResult.Fail("Texture promotion produced no assets.", log.ToString());
+            foreach (var n in promote.NonTextureLegacyNotes.Take(4))
+                log.AppendLine($"  promote note: {n}");
+            if (promote.PromotedCount == 0)
+            {
+                log.AppendLine(
+                    "promote: nothing to promote — writing normal project (leave this option off unless the mod has crest/UI .dds).");
+            }
         }
 
         var writable = FifaprojectWriter.CountWritable(fifa, extra);
