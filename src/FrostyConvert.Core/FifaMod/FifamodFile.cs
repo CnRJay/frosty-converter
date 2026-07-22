@@ -77,9 +77,11 @@ public sealed class FifamodResource
     public bool IsAdded =>
         Kind switch
         {
+            // ModWriter never writes IsAdded for EBX/Res. FifaprojectWriter also force-adds
+            // head variations (var_N, N≥1) via FifamodProjectAddedRecovery.
             FifamodResourceKind.Ebx => EbxFlags.HasFlag(FifamodEbxFlags.IsAdded),
             FifamodResourceKind.Res => ResFlags.HasFlag(FifamodResFlags.IsAdded),
-            // .fifamod never sets IsAdded (ModWriter); new legacy files only set IsLegacyAdded.
+            // .fifamod rarely sets IsAdded (ModWriter); new legacy files only set IsLegacyAdded.
             // Project load requires IsAdded so FET creates the chunk instead of looking it up.
             FifamodResourceKind.Chunk =>
                 ChunkFlags.HasFlag(FifamodChunkFlags.IsAdded)

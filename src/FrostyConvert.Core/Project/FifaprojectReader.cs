@@ -21,10 +21,13 @@ public static class FifaprojectReader
         public int PlayerLuaKeyCount { get; set; }
         public int PlayerKitLuaKeyCount { get; set; }
         public int ChunkCount { get; set; }
+        public int AddedChunkCount { get; set; }
         public int LegacyChunkCount { get; set; }
         public int LegacyAddedCount { get; set; }
         public int ResCount { get; set; }
+        public int AddedResCount { get; set; }
         public int EbxCount { get; set; }
+        public int AddedEbxCount { get; set; }
         /// <summary>EBX entries that carry Bundle Ref Table registration fields.</summary>
         public int EbxWithBrtCount { get; set; }
         public List<string> SampleLegacyPaths { get; } = new();
@@ -117,6 +120,8 @@ public static class FifaprojectReader
             Guid id = r.ReadGuid();
             ushort flags = r.ReadUInt16();
             bool isAdded = (flags & 1) != 0;
+            if (isAdded)
+                s.AddedChunkCount++;
             _ = r.ReadSha1();
 
             if ((flags & 0x08) != 0)
@@ -181,6 +186,8 @@ public static class FifaprojectReader
             bool isAdded = (resFlags & 1) != 0;
             bool directly = (resFlags & 2) != 0;
             bool hasLinked = (resFlags & 8) != 0;
+            if (isAdded)
+                s.AddedResCount++;
 
             if (s.SampleResNames.Count < 12)
                 s.SampleResNames.Add(name);
@@ -233,6 +240,8 @@ public static class FifaprojectReader
             bool hasLinked = (ebxFlags & 8) != 0;
             bool hasBrt = (ebxFlags & 4) != 0;
             bool hasParent = (ebxFlags & 0x40) != 0;
+            if (isAdded)
+                s.AddedEbxCount++;
 
             if (s.SampleEbxNames.Count < 12)
                 s.SampleEbxNames.Add(name);

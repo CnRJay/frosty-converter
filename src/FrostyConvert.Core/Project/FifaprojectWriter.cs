@@ -61,6 +61,11 @@ public static class FifaprojectWriter
             ? mod.Resources
             : mod.Resources.Concat(extraResources).ToList();
 
+        // .fifamod never stores IsAdded for EBX/Res (ModWriter clears it). New head variations
+        // (var_1+) must be project-IsAdded or FET skips them as "doesn't exist".
+        HashSet<Guid> forceAddedChunks = FifamodProjectAddedRecovery.CollectForceAddedChunkIds(all);
+        Dictionary<string, uint> resTypeByName = FifamodProjectAddedRecovery.BuildResTypeByName(all);
+
         // --- Chunks ---
         var chunks = all
             .Where(r => r.Kind == FifamodResourceKind.Chunk && ProjectPayload(r).Length > 0)
@@ -71,7 +76,8 @@ public static class FifaprojectWriter
         foreach (var c in chunks)
         {
             byte[] payload = ProjectPayload(c);
-            WriteChunkEntry(w, mod, c, payload, h32IsU64);
+            bool forceAdded = FifamodProjectAddedRecovery.ShouldForceAdded(c, forceAddedChunks);
+            WriteChunkEntry(w, mod, c, payload, h32IsU64, forceAdded);
             chunksWritten++;
         }
         long afterChunks = stream.Position;
@@ -88,7 +94,8 @@ public static class FifaprojectWriter
         int resWritten = 0;
         foreach (var r in resList)
         {
-            WriteResEntry(w, mod, r, ProjectPayload(r));
+            bool forceAdded = FifamodProjectAddedRecovery.ShouldForceAdded(r, forceAddedChunks);
+            WriteResEntry(w, mod, r, ProjectPayload(r), forceAdded);
             resWritten++;
         }
         long afterRes = stream.Position;
@@ -105,7 +112,8 @@ public static class FifaprojectWriter
         int ebxWritten = 0;
         foreach (var e in ebxList)
         {
-            WriteEbxEntry(w, mod, e, ProjectPayload(e));
+            bool forceAdded = FifamodProjectAddedRecovery.ShouldForceAdded(e, forceAddedChunks);
+            WriteEbxEntry(w, mod, e, ProjectPayload(e), forceAdded, resTypeByName);
             ebxWritten++;
         }
         long afterEbx = stream.Position;
@@ -135,7 +143,7 @@ public static class FifaprojectWriter
         // Tool version stamped as FrostyConvert release (major.minor.build.revision)
         w.WriteByte(1);
         w.WriteByte(0);
-        w.WriteByte(8);
+        w.WriteByte(10);
         w.WriteByte(0);
 
         w.WriteLengthPrefixedString(mod.GameName);
@@ -226,12 +234,13 @@ public static class FifaprojectWriter
         FifamodFile mod,
         FifamodResource c,
         byte[] payload,
-        bool h32IsU64)
+        bool h32IsU64,
+        bool forceAdded = false)
     {
         w.WriteGuid(c.ChunkId);
 
         ushort flags = 0;
-        bool isAdded = c.IsAdded;
+        bool isAdded = forceAdded || c.IsAdded;
         if (isAdded)
             flags |= ProjChunkIsAdded;
         if (c.LogicalOffset != 0)
@@ -295,10 +304,15 @@ public static class FifaprojectWriter
         w.WriteBytes(payload);
     }
 
-    private static void WriteResEntry(EndianBinaryWriter w, FifamodFile mod, FifamodResource r, byte[] payload)
+    private static void WriteResEntry(
+        EndianBinaryWriter w,
+        FifamodFile mod,
+        FifamodResource r,
+        byte[] payload,
+        bool forceAdded = false)
     {
         int originalSize = r.UncompressedSize > 0 ? r.UncompressedSize : payload.Length;
-        bool isAdded = r.IsAdded;
+        bool isAdded = forceAdded || r.IsAdded;
 
         w.WriteLengthPrefixedString(r.Name);
         var flags = FifamodResFlags.IsDirectlyModified;
@@ -345,10 +359,16 @@ public static class FifaprojectWriter
         w.WriteBytes(payload);
     }
 
-    private static void WriteEbxEntry(EndianBinaryWriter w, FifamodFile mod, FifamodResource e, byte[] payload)
+    private static void WriteEbxEntry(
+        EndianBinaryWriter w,
+        FifamodFile mod,
+        FifamodResource e,
+        byte[] payload,
+        bool forceAdded = false,
+        IReadOnlyDictionary<string, uint>? resTypeByName = null)
     {
         int originalSize = e.UncompressedSize > 0 ? e.UncompressedSize : payload.Length;
-        bool isAdded = e.IsAdded;
+        bool isAdded = forceAdded || e.IsAdded;
         FifamodBrtAddition? brt = e.BrtAddition is { BrtNameHash: not 0 } b ? b : null;
 
         w.WriteLengthPrefixedString(e.Name);
@@ -371,8 +391,21 @@ public static class FifaprojectWriter
 
         if (isAdded)
         {
-            w.WriteLengthPrefixedString(e.EbxTypeName ?? "TextureAsset");
-            w.WriteGuid(e.EbxGuid != Guid.Empty ? e.EbxGuid : Guid.NewGuid());
+            uint? resType = null;
+            if (resTypeByName is not null
+                && !string.IsNullOrEmpty(e.Name)
+                && resTypeByName.TryGetValue(e.Name, out uint rt))
+                resType = rt;
+
+            string typeName = !string.IsNullOrEmpty(e.EbxTypeName)
+                ? e.EbxTypeName!
+                : FifamodProjectAddedRecovery.GuessEbxTypeName(e.Name, resType);
+            Guid guid = e.EbxGuid != Guid.Empty
+                ? e.EbxGuid
+                : FifamodProjectAddedRecovery.TryExtractRiffEbxGuid(e.Data)
+                  ?? Guid.NewGuid();
+            w.WriteLengthPrefixedString(typeName);
+            w.WriteGuid(guid);
         }
 
         // Order matches EditorProject.Save / Load for directly-modified EBX:

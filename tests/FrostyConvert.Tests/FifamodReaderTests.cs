@@ -1,5 +1,6 @@
 using FrostyConvert.Core.Convert;
 using FrostyConvert.Core.FifaMod;
+using FrostyConvert.Core.Legacy;
 using FrostyConvert.Core.Project;
 
 namespace FrostyConvert.Tests;
@@ -140,6 +141,138 @@ public class FifamodReaderTests
     }
 
     [Fact]
+    public void ProjectAddedRecovery_DetectsVar1PlusPaths()
+    {
+        Assert.True(FifamodProjectAddedRecovery.IsAddedHeadVariationPath(
+            "content/character/player/player_1/1/var_1/head_1_0_1_color"));
+        Assert.True(FifamodProjectAddedRecovery.IsAddedHeadVariationPath(
+            "content/character/player/player_1/1/var_1_starhead_brt"));
+        Assert.True(FifamodProjectAddedRecovery.IsAddedHeadVariationPath(
+            "content/character/player/player_1/1/var_2/face_1_0_2_normal"));
+        Assert.False(FifamodProjectAddedRecovery.IsAddedHeadVariationPath(
+            "content/character/player/player_1/1/var_0/head_1_0_0_color"));
+        Assert.False(FifamodProjectAddedRecovery.IsAddedHeadVariationPath(
+            "content/character/player/player_1/1/var_0_starhead_brt"));
+        Assert.False(FifamodProjectAddedRecovery.IsAddedHeadVariationPath(null));
+    }
+
+    [Fact]
+    public void ProjectAddedRecovery_GuessesTypes_FromResAndPath()
+    {
+        Assert.Equal("TextureAsset",
+            FifamodProjectAddedRecovery.GuessEbxTypeName(
+                "content/x/var_1/face_1_0_1_color", TextureResBuilder.TextureResType));
+        Assert.Equal("SkinnedMeshAsset",
+            FifamodProjectAddedRecovery.GuessEbxTypeName(
+                "content/x/var_1/hair_1_0_1_mesh", FifamodProjectAddedRecovery.MeshSetResType));
+        // No RES: hair/head roots are ObjectBlueprint (mesh editor needs *_mesh RES)
+        Assert.Equal("ObjectBlueprint",
+            FifamodProjectAddedRecovery.GuessEbxTypeName("content/x/var_1/hair_1_0_1"));
+        Assert.Equal("ObjectBlueprint",
+            FifamodProjectAddedRecovery.GuessEbxTypeName("content/x/var_1/head_1_0_1"));
+        Assert.Equal("MeshVariationDatabase",
+            FifamodProjectAddedRecovery.GuessEbxTypeName(
+                "content/x/var_1_starhead_brt/meshvariationdb_win32"));
+    }
+
+    [Fact]
+    public void ProjectAddedRecovery_ExtractsEbxGuid_After12BytePad()
+    {
+        var expected = new Guid("e5a96b52-af39-4f29-9283-5df9f62a4bdc");
+        byte[] ebx = BuildMinimalRiffEbx(expected);
+        Guid? got = FifamodProjectAddedRecovery.TryExtractRiffEbxGuid(ebx);
+        Assert.Equal(expected, got);
+    }
+
+    [Fact]
+    public void FifaprojectWriter_ForcesIsAdded_ForHeadVariationVar1()
+    {
+        // Minimal RIFF EBX with EBXD + 16 zero pad + partition guid
+        var partitionGuid = new Guid("11223344-5566-7788-99aa-bbccddeeff00");
+        byte[] ebxData = BuildMinimalRiffEbx(partitionGuid);
+        byte[] ebxPayload = ebxData; // store uncompressed as project payload is fine for synthetic
+
+        var chunkId = new Guid("aabbccdd-eeff-0011-2233-445566778899");
+        byte[] texRes = new byte[TextureResBuilder.FixedSize];
+        chunkId.ToByteArray().CopyTo(texRes.AsSpan(TextureResBuilder.ChunkIdOffset));
+
+        byte[] chunkBytes = new byte[] { 1, 2, 3, 4, 5 };
+
+        var mod = new FifamodFile
+        {
+            Path = "face-var1.fifamod",
+            GameName = "FC26",
+            GameVersion = 2927799,
+            Details = new FifamodDetails
+            {
+                Title = "Var1 Face",
+                Author = "T",
+                Version = "1.0",
+                Description = "d",
+            },
+            Resources = new[]
+            {
+                new FifamodResource
+                {
+                    Name = chunkId.ToString(),
+                    Kind = FifamodResourceKind.Chunk,
+                    ChunkId = chunkId,
+                    // No IsAdded in mod flags — recovery must force it
+                    CompressedData = chunkBytes,
+                    Data = chunkBytes,
+                    UncompressedSize = chunkBytes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(chunkBytes),
+                },
+                new FifamodResource
+                {
+                    Name = "content/character/player/player_1000/1001/var_1/face_1001_0_1_color",
+                    Kind = FifamodResourceKind.Res,
+                    ResType = TextureResBuilder.TextureResType,
+                    ResRid = 99,
+                    ResMeta = new byte[16],
+                    CompressedData = texRes,
+                    Data = texRes,
+                    UncompressedSize = texRes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(texRes),
+                },
+                new FifamodResource
+                {
+                    Name = "content/character/player/player_1000/1001/var_1/face_1001_0_1_color",
+                    Kind = FifamodResourceKind.Ebx,
+                    // ModWriter never sets IsAdded
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+                // var_0 control: must stay non-added
+                new FifamodResource
+                {
+                    Name = "content/character/player/player_1000/1001/var_0/face_1001_0_0_color",
+                    Kind = FifamodResourceKind.Ebx,
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+            },
+        };
+
+        using var ms = new MemoryStream();
+        FifaprojectWriter.Write(ms, mod);
+        ms.Position = 0;
+        var summary = FifaprojectReader.ReadSummary(ms);
+
+        Assert.Equal(2, summary.EbxCount);
+        Assert.Equal(1, summary.AddedEbxCount); // only var_1
+        Assert.Equal(1, summary.ResCount);
+        Assert.Equal(1, summary.AddedResCount);
+        Assert.Equal(1, summary.ChunkCount);
+        Assert.Equal(1, summary.AddedChunkCount);
+        Assert.Empty(summary.Warnings);
+    }
+
+    [Fact]
     public void FifaprojectWriter_WritesBrtFields_ReadableBySummary()
     {
         byte[] payload = new byte[] { 0xCA, 0xFE, 0xBA, 0xBE };
@@ -184,6 +317,32 @@ public class FifamodReaderTests
         Assert.Equal(1, summary.EbxWithBrtCount);
         Assert.Contains(summary.SampleBrtPaths, p => p.Contains("win32/characters/shoes/test", StringComparison.Ordinal));
         Assert.Empty(summary.Warnings);
+    }
+
+    /// <summary>Minimal RIFF/EBX with EBXD chunk: 12 zero pad + partition GUID (FC26 layout).</summary>
+    private static byte[] BuildMinimalRiffEbx(Guid partitionGuid)
+    {
+        var ebxD = new byte[28];
+        // 12 zero pad then GUID
+        partitionGuid.ToByteArray().CopyTo(ebxD.AsSpan(12));
+        int riffPayload = 4 + 8 + ebxD.Length;
+        var buf = new byte[8 + riffPayload];
+        buf[0] = (byte)'R';
+        buf[1] = (byte)'I';
+        buf[2] = (byte)'F';
+        buf[3] = (byte)'F';
+        BitConverter.TryWriteBytes(buf.AsSpan(4), riffPayload);
+        buf[8] = (byte)'E';
+        buf[9] = (byte)'B';
+        buf[10] = (byte)'X';
+        buf[11] = 0;
+        buf[12] = (byte)'E';
+        buf[13] = (byte)'B';
+        buf[14] = (byte)'X';
+        buf[15] = (byte)'D';
+        BitConverter.TryWriteBytes(buf.AsSpan(16), ebxD.Length);
+        Buffer.BlockCopy(ebxD, 0, buf, 20, ebxD.Length);
+        return buf;
     }
 
     private static MemoryStream BuildMinimalFetmWithBrtAndCollectors()
