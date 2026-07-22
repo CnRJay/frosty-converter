@@ -78,7 +78,8 @@ public sealed class FifamodResource
         Kind switch
         {
             // ModWriter never writes IsAdded for EBX/Res. FifaprojectWriter also force-adds
-            // head variations (var_N, N≥1) via FifamodProjectAddedRecovery.
+            // head variations (var_N, N≥1), created players, and created kits via
+            // FifamodProjectAddedRecovery.
             FifamodResourceKind.Ebx => EbxFlags.HasFlag(FifamodEbxFlags.IsAdded),
             FifamodResourceKind.Res => ResFlags.HasFlag(FifamodResFlags.IsAdded),
             // .fifamod rarely sets IsAdded (ModWriter); new legacy files only set IsLegacyAdded.

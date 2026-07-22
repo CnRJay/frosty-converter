@@ -62,7 +62,8 @@ public static class FifaprojectWriter
             : mod.Resources.Concat(extraResources).ToList();
 
         // .fifamod never stores IsAdded for EBX/Res (ModWriter clears it). New head variations
-        // (var_1+) must be project-IsAdded or FET skips them as "doesn't exist".
+        // (var_1+), created-player (numeric face folder), and created-kit (numeric team folder)
+        // paths must be project-IsAdded or FET skips them as "doesn't exist".
         HashSet<Guid> forceAddedChunks = FifamodProjectAddedRecovery.CollectForceAddedChunkIds(all);
         Dictionary<string, uint> resTypeByName = FifamodProjectAddedRecovery.BuildResTypeByName(all);
 
@@ -143,7 +144,7 @@ public static class FifaprojectWriter
         // Tool version stamped as FrostyConvert release (major.minor.build.revision)
         w.WriteByte(1);
         w.WriteByte(0);
-        w.WriteByte(11);
+        w.WriteByte(12);
         w.WriteByte(0);
 
         w.WriteLengthPrefixedString(mod.GameName);

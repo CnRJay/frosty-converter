@@ -9,8 +9,9 @@ namespace FrostyConvert.Core.FifaMod;
 /// <para>
 /// FET's project loader looks up non-added EBX/Res/Chunks in the live TOC. Missing entries
 /// become orphan modifications (warning: "doesn't exist") and never appear in Data Explorer.
-/// New head variations (<c>var_1</c>, <c>var_2</c>, …) are always added assets — they cannot
-/// exist in the base game — so we force <c>IsAdded</c> for those paths and their linked chunks.
+/// Paths that cannot exist in the base TOC are force-marked <c>IsAdded</c>:
+/// head variations (<c>var_N</c>, N≥1), created-player folders (numeric face id), and
+/// created-team kit folders (numeric team id), plus exclusive chunks those RES reference.
 /// </para>
 /// </summary>
 public static class FifamodProjectAddedRecovery
@@ -20,11 +21,28 @@ public static class FifamodProjectAddedRecovery
 
     /// <summary>
     /// Matches <c>.../var_N/...</c> or <c>.../var_N_starhead_brt</c> for N ≥ 1.
-    /// <c>var_0</c> is the default variation (usually a TOC hit / modification).
+    /// Named-player <c>var_0</c> is usually a TOC hit / modification.
     /// </summary>
     private static readonly Regex AddedHeadVariationPath = new(
         @"/var_([1-9]\d*)(/|_)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Created / custom faces use a pure-numeric folder:
+    /// <c>…/player/player_50000/50247/var_0/…</c> (no firstname_lastname_id segment).
+    /// EA base faces use a named segment; those stay non-added so live TOC mods still apply.
+    /// </summary>
+    private static readonly Regex CreatedPlayerNumericFolder = new(
+        @"/player/player_\d+/(\d+)(/|_)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Created teams use a pure-numeric kit folder:
+    /// <c>…/kit/kit_150000/150039/home_0_0/jersey_…</c> (no club_name_id segment).
+    /// </summary>
+    private static readonly Regex CreatedKitNumericFolder = new(
+        @"/kit/kit_\d+/(\d+)(/|_)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static bool IsAddedHeadVariationPath(string? name)
     {
@@ -33,8 +51,37 @@ public static class FifamodProjectAddedRecovery
         return AddedHeadVariationPath.IsMatch(name.Replace('\\', '/'));
     }
 
+    /// <summary>True for created-player paths with a numeric face-id folder (any <c>var_N</c>).</summary>
+    public static bool IsCreatedPlayerAssetPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        return CreatedPlayerNumericFolder.IsMatch(name.Replace('\\', '/'));
+    }
+
+    /// <summary>True for created-team kit paths with a numeric team-id folder.</summary>
+    public static bool IsCreatedKitAssetPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        return CreatedKitNumericFolder.IsMatch(name.Replace('\\', '/'));
+    }
+
     /// <summary>
-    /// Chunk GUIDs referenced only by force-added (var_N, N≥1) RES payloads.
+    /// Combined offline force-<c>IsAdded</c> path heuristic (head var_N≥1, created player, created kit).
+    /// </summary>
+    public static bool IsForceAddedAssetPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        string n = name.Replace('\\', '/');
+        return AddedHeadVariationPath.IsMatch(n)
+               || CreatedPlayerNumericFolder.IsMatch(n)
+               || CreatedKitNumericFolder.IsMatch(n);
+    }
+
+    /// <summary>
+    /// Chunk GUIDs referenced only by force-added RES payloads.
     /// Excludes GUIDs also referenced by other RES in the mod (shared / base replacements).
     /// </summary>
     public static HashSet<Guid> CollectForceAddedChunkIds(IReadOnlyList<FifamodResource> resources)
@@ -56,7 +103,7 @@ public static class FifamodProjectAddedRecovery
             if (r.Data is not { Length: >= 16 })
                 continue;
 
-            bool force = IsAddedHeadVariationPath(r.Name);
+            bool force = IsForceAddedAssetPath(r.Name);
             CollectChunkGuidsFromRes(r, knownChunks, force ? fromAdded : fromOther);
         }
 
@@ -85,7 +132,7 @@ public static class FifamodProjectAddedRecovery
         return r.Kind switch
         {
             FifamodResourceKind.Ebx or FifamodResourceKind.Res
-                => IsAddedHeadVariationPath(r.Name),
+                => IsForceAddedAssetPath(r.Name),
             FifamodResourceKind.Chunk
                 => r.ChunkId != Guid.Empty && forceAddedChunks.Contains(r.ChunkId),
             _ => false,

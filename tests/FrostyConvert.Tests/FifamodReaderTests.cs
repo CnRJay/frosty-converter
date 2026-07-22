@@ -157,6 +157,36 @@ public class FifamodReaderTests
     }
 
     [Fact]
+    public void ProjectAddedRecovery_DetectsCreatedPlayerAndKitPaths()
+    {
+        // Created faces: pure-numeric folder under player_XXXXX (any var, including var_0)
+        Assert.True(FifamodProjectAddedRecovery.IsCreatedPlayerAssetPath(
+            "content/character/player/player_50000/50247/var_0/hair_50247_0_0_coeff"));
+        Assert.True(FifamodProjectAddedRecovery.IsCreatedPlayerAssetPath(
+            "content/character/player/player_50000/50247/var_0_starhead_brt"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_50000/50247/var_0/face_50247_0_0_color"));
+
+        // Named EA-style player segment: not a "created" folder
+        Assert.False(FifamodProjectAddedRecovery.IsCreatedPlayerAssetPath(
+            "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/head_185221_0_0_mesh"));
+        Assert.False(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/head_185221_0_0_mesh"));
+
+        // Created kits: pure-numeric team folder
+        Assert.True(FifamodProjectAddedRecovery.IsCreatedKitAssetPath(
+            "content/character/kit/kit_150000/150039/home_0_0/jersey_150039_0_0_color"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/kit/kit_150000/150039/home_0_0_launch_kit_brt"));
+        Assert.False(FifamodProjectAddedRecovery.IsCreatedKitAssetPath(
+            "content/character/kit/kit_131500/milano_fc_131681/home_0_0/hotspots_131681_0_0"));
+
+        Assert.False(FifamodProjectAddedRecovery.IsCreatedPlayerAssetPath(null));
+        Assert.False(FifamodProjectAddedRecovery.IsCreatedKitAssetPath(null));
+        Assert.False(FifamodProjectAddedRecovery.IsForceAddedAssetPath(null));
+    }
+
+    [Fact]
     public void ProjectAddedRecovery_GuessesTypes_FromResAndPath()
     {
         Assert.Equal("TextureAsset",
@@ -225,7 +255,7 @@ public class FifamodReaderTests
                 },
                 new FifamodResource
                 {
-                    Name = "content/character/player/player_1000/1001/var_1/face_1001_0_1_color",
+                    Name = "content/character/player/player_1000/test_player_1001/var_1/face_1001_0_1_color",
                     Kind = FifamodResourceKind.Res,
                     ResType = TextureResBuilder.TextureResType,
                     ResRid = 99,
@@ -237,7 +267,7 @@ public class FifamodReaderTests
                 },
                 new FifamodResource
                 {
-                    Name = "content/character/player/player_1000/1001/var_1/face_1001_0_1_color",
+                    Name = "content/character/player/player_1000/test_player_1001/var_1/face_1001_0_1_color",
                     Kind = FifamodResourceKind.Ebx,
                     // ModWriter never sets IsAdded
                     CompressedData = ebxPayload,
@@ -245,10 +275,10 @@ public class FifamodReaderTests
                     UncompressedSize = ebxData.Length,
                     Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
                 },
-                // var_0 control: must stay non-added
+                // Named-player var_0 control: must stay non-added (TOC modification)
                 new FifamodResource
                 {
-                    Name = "content/character/player/player_1000/1001/var_0/face_1001_0_0_color",
+                    Name = "content/character/player/player_1000/test_player_1001/var_0/face_1001_0_0_color",
                     Kind = FifamodResourceKind.Ebx,
                     CompressedData = ebxPayload,
                     Data = ebxData,
@@ -265,6 +295,99 @@ public class FifamodReaderTests
 
         Assert.Equal(2, summary.EbxCount);
         Assert.Equal(1, summary.AddedEbxCount); // only var_1
+        Assert.Equal(1, summary.ResCount);
+        Assert.Equal(1, summary.AddedResCount);
+        Assert.Equal(1, summary.ChunkCount);
+        Assert.Equal(1, summary.AddedChunkCount);
+        Assert.Empty(summary.Warnings);
+    }
+
+    [Fact]
+    public void FifaprojectWriter_ForcesIsAdded_ForCreatedPlayerAndKit()
+    {
+        var partitionGuid = new Guid("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        byte[] ebxData = BuildMinimalRiffEbx(partitionGuid);
+        byte[] ebxPayload = ebxData;
+
+        var chunkId = new Guid("11111111-2222-3333-4444-555555555555");
+        byte[] texRes = new byte[TextureResBuilder.FixedSize];
+        chunkId.ToByteArray().CopyTo(texRes.AsSpan(TextureResBuilder.ChunkIdOffset));
+        byte[] chunkBytes = new byte[] { 9, 8, 7, 6 };
+
+        var mod = new FifamodFile
+        {
+            Path = "created-face-kit.fifamod",
+            GameName = "FC26",
+            GameVersion = 2927799,
+            Details = new FifamodDetails
+            {
+                Title = "Created Face+Kit",
+                Author = "T",
+                Version = "1.0",
+                Description = "d",
+            },
+            Resources = new[]
+            {
+                new FifamodResource
+                {
+                    Name = chunkId.ToString(),
+                    Kind = FifamodResourceKind.Chunk,
+                    ChunkId = chunkId,
+                    CompressedData = chunkBytes,
+                    Data = chunkBytes,
+                    UncompressedSize = chunkBytes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(chunkBytes),
+                },
+                new FifamodResource
+                {
+                    Name = "content/character/player/player_50000/50247/var_0/face_50247_0_0_color",
+                    Kind = FifamodResourceKind.Res,
+                    ResType = TextureResBuilder.TextureResType,
+                    ResRid = 50,
+                    ResMeta = new byte[16],
+                    CompressedData = texRes,
+                    Data = texRes,
+                    UncompressedSize = texRes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(texRes),
+                },
+                new FifamodResource
+                {
+                    Name = "content/character/player/player_50000/50247/var_0/face_50247_0_0_color",
+                    Kind = FifamodResourceKind.Ebx,
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+                new FifamodResource
+                {
+                    Name = "content/character/kit/kit_150000/150039/home_0_0/jersey_150039_0_0_color",
+                    Kind = FifamodResourceKind.Ebx,
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+                // Named player var_0 must remain a plain modification
+                new FifamodResource
+                {
+                    Name = "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/hair_185221_0_0_color",
+                    Kind = FifamodResourceKind.Ebx,
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+            },
+        };
+
+        using var ms = new MemoryStream();
+        FifaprojectWriter.Write(ms, mod);
+        ms.Position = 0;
+        var summary = FifaprojectReader.ReadSummary(ms);
+
+        Assert.Equal(3, summary.EbxCount);
+        Assert.Equal(2, summary.AddedEbxCount); // created face + created kit
         Assert.Equal(1, summary.ResCount);
         Assert.Equal(1, summary.AddedResCount);
         Assert.Equal(1, summary.ChunkCount);

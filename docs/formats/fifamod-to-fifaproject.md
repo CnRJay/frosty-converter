@@ -26,14 +26,14 @@ Ground truth: decompiled **FIFA Editor Tool** `ModWriter.WriteProject` (FETM) an
 `ModWriter` **never** writes `IsAdded` for EBX or Res (it clears those bits). New legacy files only set `IsLegacyAdded` on chunks.  
 `EditorProject.Load` requires project `IsAdded` to **create** an asset; without it FET looks the name/GUID up in the live TOC and, on a miss, logs *"doesn't exist"* and leaves an orphan entry that **never appears in Data Explorer**.
 
-That is the main reason **face packs with head variation id ≥ 1** (`…/var_1/…`, `…/var_2/…`) looked empty after convert: those paths are always **new** assets (duplicated from `var_0` in FET), not TOC hits.
+That is the main reason **face packs with head variation id ≥ 1** (`…/var_1/…`, `…/var_2/…`) and **created players/teams** looked empty after convert: those paths are always **new** assets (not TOC hits). Created faces use a pure-numeric folder (`…/player_50000/50247/var_0/…`); created kits use a pure-numeric team folder (`…/kit_150000/150039/…`). Named EA-style segments (`…/luiz_gustavo_dias_185221/…`) stay non-added so real-player replacements still resolve via live TOC.
 
 FrostyConvert treats assets as added when:
 
 | Kind | Force `IsAdded` when |
 |------|----------------------|
-| Chunk | Mod flag `IsAdded`, **or** `IsLegacyAdded`, **or** chunk GUID is referenced only by force-added Res (e.g. texture/mesh of a `var_N` N≥1 face) |
-| Res / EBX | Mod flag `IsAdded`, **or** asset path matches `/var_N` with **N ≥ 1** (including `var_1_starhead_brt`) |
+| Chunk | Mod flag `IsAdded`, **or** `IsLegacyAdded`, **or** chunk GUID is referenced only by force-added Res (texture/mesh of a force-added path) |
+| Res / EBX | Mod flag `IsAdded`, **or** path matches `/var_N` with **N ≥ 1**, **or** created-player numeric face folder, **or** created-kit numeric team folder |
 
 For force-added EBX we also write a best-effort type name (path heuristic) and partition GUID from the RIFF `EBXD` block when present.
 
@@ -44,7 +44,7 @@ For force-added EBX we also write a best-effort type name (path heuristic) and p
 | `AssetSha1AtImport` | Needs live game asset at import time → zeros offline |
 | `GamePatchVersionAtImport` | We write the mod’s `gameVersion` (best available) |
 | Linked assets graph | Not stored in `.fifamod`; FET rebuilds from live managers after load |
-| EBX/Res `IsAdded` when flag clear | Mod never stores it; we force it for `var_N` (N≥1) head variations and their exclusive chunks. Other truly-new `var_0` assets still need a live FET Save to re-link if TOC miss occurs. |
+| EBX/Res `IsAdded` when flag clear | Mod never stores it; we force it for `var_N` (N≥1), created-player/kit numeric folders, and their exclusive chunks. Named-player `var_0` assets that are truly new (no TOC entry) still need a live FET Save if they miss. |
 | Exact FET tool version bytes | Written as `0.1.0.0` |
 | Collectors / BRT name footers on project | Project format has no trailing tables; export regenerates them |
 | Password-locked mods (FMT Pro) | Detected via header/decompress heuristics; cannot unlock without author password/key |
