@@ -143,7 +143,7 @@ public static class FifaprojectWriter
         // Tool version stamped as FrostyConvert release (major.minor.build.revision)
         w.WriteByte(1);
         w.WriteByte(0);
-        w.WriteByte(10);
+        w.WriteByte(11);
         w.WriteByte(0);
 
         w.WriteLengthPrefixedString(mod.GameName);
