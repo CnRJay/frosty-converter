@@ -11,23 +11,25 @@
 
 ### Convert
 
-**GUI** (easiest): double-click `FrostyConvert.FifaGui.exe` from the release zip, pick a `.fifamod`, Convert.
+**GUI** (easiest): double-click `Frosty Converter.exe` from the release zip, pick a `.fifamod`, Convert.
 
-**Release zip CLI** (`FrostyConvert-FifaTool-v*-win-x64.zip` from GitHub Releases):
+**CLI** (same exe — pass arguments; package `FrostyConvert-FifaTool-v*-win-x64.zip`):
 
 ```bat
-fbmod2project.exe "mod.fifamod" -o recovered.fifaproject
+"Frosty Converter.exe" "mod.fifamod" -o recovered.fifaproject
 ```
 
 **From source:**
 
 ```bash
 dotnet run --project src/FrostyConvert.FifaGui
-# or CLI:
+# or CLI host:
 dotnet run --project src/FrostyConvert.Cli -- "mod.fifamod" -o recovered.fifaproject
 ```
 
-Optional: `--inspect` first to list resources; `--oodle path` if the Oodle DLL is not next to the CLI.
+Optional: `--inspect` first to list resources; `--oodle path` if the Oodle DLL is not next to the exe.
+
+> Release builds are unsigned — SmartScreen/AV may false-flag the exe. See the README.
 ### Open in the editor
 
 1. Launch **FIFA Editor Tool** and load the matching game.
@@ -51,7 +53,7 @@ With the game loaded, FET rehydrates EBX through its live SDK types—the same r
 World Cup–style packs mix **legacy DDS** (crests/UI images) with **`.big` Apt UI**, fonts, and a few `content/` Texture RES. FET **Data Explorer only lists EBX**, so:
 
 ```bat
-fbmod2project.exe "WorldCup.fifamod" -o recovered.fifaproject --promote-legacy-textures
+"Frosty Converter.exe" "WorldCup.fifamod" -o recovered.fifaproject --promote-legacy-textures
 ```
 
 | Source in `.fifamod` | After promote | Where to edit in FET |
@@ -73,7 +75,7 @@ Optional flags:
 Original legacy entries are always kept for Mod Manager export. After editing TextureAssets, **File → Save** in FET before export.
 
 ```bat
-fbmod2project.exe "mod.fifamod" -o recovered.fifaproject --extract-legacy out\legacy
+"Frosty Converter.exe" "mod.fifamod" -o recovered.fifaproject --extract-legacy out\legacy
 ```
 
 ## What the converter writes

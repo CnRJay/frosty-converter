@@ -97,38 +97,31 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $ver = "${{ steps.ver.outputs.version }}"
-          $cliOut = "dist/_staging/FifaTool"
-          New-Item -ItemType Directory -Path $cliOut -Force | Out-Null
-          dotnet publish src/FrostyConvert.Cli/FrostyConvert.Cli.csproj `
-            -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true `
-            -p:Version=$ver -o $cliOut
-          if ($LASTEXITCODE -ne 0) { throw "CLI publish failed" }
-          $guiTmp = "dist/_staging/FifaGui_publish"
-          if (Test-Path $guiTmp) { Remove-Item $guiTmp -Recurse -Force }
+          $toolOut = "dist/_staging/FifaTool"
+          New-Item -ItemType Directory -Path $toolOut -Force | Out-Null
+          # Single dual-mode exe: GUI when double-clicked, CLI when args are passed
           dotnet publish src/FrostyConvert.FifaGui/FrostyConvert.FifaGui.csproj `
             -c Release -r win-x64 --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
-            -p:Version=$ver -o $guiTmp
-          if ($LASTEXITCODE -ne 0) { throw "FIFA GUI publish failed" }
-          Copy-Item "$guiTmp/FrostyConvert.FifaGui.exe" $cliOut -Force
-          # Single-file exes only; drop loose runtime DLLs / json / pdb
-          Get-ChildItem $cliOut -File | Where-Object {
-            $_.Name -notin @("fbmod2project.exe", "FrostyConvert.FifaGui.exe") -and
+            -p:Version=$ver -o $toolOut
+          if ($LASTEXITCODE -ne 0) { throw "Frosty Converter publish failed" }
+          Get-ChildItem $toolOut -File | Where-Object {
+            $_.Name -notin @("Frosty Converter.exe") -and
             $_.Extension -ne ".exe"
           } | Remove-Item -Force -ErrorAction SilentlyContinue
-          Copy-Item third_party/oodle/bin/oodle-data-shared.dll $cliOut -Force
-          Copy-Item packaging/FifaTool/INSTALL.txt $cliOut -Force
+          if (-not (Test-Path "$toolOut/Frosty Converter.exe")) {
+            throw "Frosty Converter.exe missing after publish"
+          }
+          Copy-Item third_party/oodle/bin/oodle-data-shared.dll $toolOut -Force
+          Copy-Item packaging/FifaTool/INSTALL.txt $toolOut -Force
           New-Item -ItemType Directory -Path dist -Force | Out-Null
           $zip = "dist/FrostyConvert-FifaTool-v$ver-win-x64.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path "$cliOut/*" -DestinationPath $zip -Force
+          Compress-Archive -Path "$toolOut/*" -DestinationPath $zip -Force
           Write-Host "Created $zip size=$((Get-Item $zip).Length)"
-          Get-ChildItem $cliOut | ForEach-Object { Write-Host "  package file: $($_.Name)" }
+          Get-ChildItem $toolOut | ForEach-Object { Write-Host "  package file: $($_.Name)" }
 
       - name: Pack MMC plugin zip
         shell: pwsh
@@ -177,14 +170,16 @@ jobs:
 
             | Package | Use for |
             |---------|---------|
-            | **FrostyConvert-FifaTool-…-win-x64.zip** | FIFA / EA FC — convert `.fifamod` → `.fifaproject` (GUI + CLI) |
+            | **FrostyConvert-FifaTool-…-win-x64.zip** | FIFA / EA FC — convert `.fifamod` → `.fifaproject` |
             | **FrostyConvert-MmcPlugin-….zip** | College Football / Madden — MMC live `.fbmod` import |
 
-            ### FIFA tool
-            1. Unzip anywhere (keep `.exe` files and `oodle-data-shared.dll` together).
-            2. **GUI:** double-click `FrostyConvert.FifaGui.exe`, pick a `.fifamod`, Convert.
-            3. **CLI:** `fbmod2project.exe mod.fifamod -o recovered.fifaproject`
-            4. Open the project in FIFA Editor Tool with the game loaded.
+            > **Antivirus / SmartScreen:** builds are **not code-signed**. Windows Defender or other AV may flag `Frosty Converter.exe` as a false positive. Prefer **More info → Run anyway**, or build from source.
+
+            ### FIFA tool (`Frosty Converter.exe`)
+            1. Unzip anywhere (keep the `.exe` and `oodle-data-shared.dll` together).
+            2. **GUI:** double-click `Frosty Converter.exe`, pick a `.fifamod`, Convert.
+            3. **CLI:** `"Frosty Converter.exe" mod.fifamod -o recovered.fifaproject`
+            4. Open the project in FIFA Editor Tool with the game loaded → **File → Save** → export a new mod.
 
             ### MMC plugin
             1. Close MMC Editor.

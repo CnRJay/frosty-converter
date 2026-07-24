@@ -1,21 +1,28 @@
-FrostyConvert — FIFA / EA FC tool
-================================
+Frosty Converter — FIFA / EA FC tool
+====================================
 
 Convert compiled FIFA Editor Tool / Mod Manager .fifamod files into
-editable .fifaproject files.
+editable .fifaproject files. One exe: GUI when double-clicked, CLI when
+you pass arguments.
 
 Package contents
 ----------------
-  FrostyConvert.FifaGui.exe — simple GUI (double-click to convert)
-  fbmod2project.exe         — CLI tool (Windows x64, .NET runtime embedded)
-  oodle-data-shared.dll     — Oodle decompression (must stay next to the .exes)
-  INSTALL.txt               — this file
+  Frosty Converter.exe  — GUI + CLI (Windows x64, .NET runtime embedded)
+  oodle-data-shared.dll — Oodle decompression (must stay next to the .exe)
+  INSTALL.txt           — this file
+
+Windows SmartScreen / antivirus
+-------------------------------
+This build is not code-signed. Windows or antivirus may warn or quarantine
+the .exe as a false positive. That is normal for unsigned open-source tools.
+If prompted: More info → Run anyway, or add an exclusion for this folder.
+Source is public on GitHub if you prefer to build yourself.
 
 Quick start (GUI)
 -----------------
-1. Unzip this folder anywhere (keep the .exes and .dll in the same folder).
+1. Unzip this folder anywhere (keep the .exe and .dll in the same folder).
 
-2. Double-click FrostyConvert.FifaGui.exe
+2. Double-click "Frosty Converter.exe"
 
 3. Browse to a .fifamod (or drag-and-drop), click Convert.
    Leave "promote legacy .dds" unchecked unless this is a crest/UI pack
@@ -25,7 +32,8 @@ Quick start (GUI)
 
 5. File → Open Project → recovered.fifaproject
 
-6. Edit assets, then save / export a new mod if desired.
+6. File → Save, then export a NEW .fifamod and test in Mod Manager.
+   Skipping Save is the most common cause of “works in editor, broken in game.”
 
 Quick start (CLI)
 -----------------
@@ -33,24 +41,22 @@ Quick start (CLI)
 
 2. Open a terminal in this folder and run:
 
-     fbmod2project.exe "path\to\mod.fifamod" --inspect
-     fbmod2project.exe "path\to\mod.fifamod" -o recovered.fifaproject
+     "Frosty Converter.exe" "path\to\mod.fifamod" --inspect
+     "Frosty Converter.exe" "path\to\mod.fifamod" -o recovered.fifaproject
 
 3. Open FIFA Editor Tool, load the matching game (e.g. FC26).
 
-4. File → Open Project → recovered.fifaproject
-
-5. Edit assets, then save / export a new mod if desired.
+4. File → Open Project → recovered.fifaproject → Save → export new mod.
 
 Also works for Frosty .fbmod inventory and offline .fbproject:
 
-     fbmod2project.exe mod.fbmod --inspect
-     fbmod2project.exe mod.fbmod -o recovered.fbproject
+     "Frosty Converter.exe" mod.fbmod --inspect
+     "Frosty Converter.exe" mod.fbmod -o recovered.fbproject
 
 (CFB/Madden property-grid editing still needs the MMC plugin package.)
 
-Flags
------
+Common flags
+------------
   --inspect              List assets in the mod
   -o, --output PATH      Write .fifaproject or .fbproject
   --json                 JSON report
@@ -66,4 +72,4 @@ Requirements
 - No separate .NET install required (self-contained single-file build)
 - FIFA Editor Tool installed to open .fifaproject results
 
-Source repository: FrostyConvert (see GitHub Releases page for this project)
+Source: https://github.com/CnRJay/frosty-converter

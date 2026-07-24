@@ -16,7 +16,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "FrostyConvert — FIFA";
+        Text = "Frosty Converter";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;

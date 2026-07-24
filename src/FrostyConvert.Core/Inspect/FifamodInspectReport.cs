@@ -98,7 +98,7 @@ public sealed class FifamodInspectReport
 
         report.Notes.Add(
             "FIFA Editor Tool has no plugin API. Convert to .fifaproject and open it in FET with FC26 loaded: " +
-            "fbmod2project mod.fifamod -o recovered.fifaproject");
+            "\"Frosty Converter.exe\" mod.fifamod -o recovered.fifaproject");
 
         return report;
     }

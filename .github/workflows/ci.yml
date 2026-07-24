@@ -33,8 +33,8 @@ jobs:
       - name: Test
         run: dotnet test tests/FrostyConvert.Tests/FrostyConvert.Tests.csproj -c Release --nologo
 
-      - name: Publish CLI (smoke)
+      - name: Publish Frosty Converter (smoke)
         run: >
-          dotnet publish src/FrostyConvert.Cli/FrostyConvert.Cli.csproj
+          dotnet publish src/FrostyConvert.FifaGui/FrostyConvert.FifaGui.csproj
           -c Release -r win-x64 --self-contained true
-          -o artifacts/cli-smoke
+          -o artifacts/tool-smoke

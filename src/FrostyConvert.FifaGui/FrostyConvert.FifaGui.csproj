@@ -1,16 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <!-- Exe (console) so CLI mode has working stdout; Program hides the console for GUI. -->
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>FrostyConvert.FifaGui</AssemblyName>
+    <AssemblyName>Frosty Converter</AssemblyName>
     <RootNamespace>FrostyConvert.FifaGui</RootNamespace>
     <Version>1.0.0</Version>
-    <Product>FrostyConvert FIFA</Product>
-    <Description>Convert .fifamod files to editable .fifaproject files</Description>
+    <Product>Frosty Converter</Product>
+    <Description>Convert .fifamod / .fbmod files to editable editor projects (GUI + CLI)</Description>
     <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
