@@ -167,11 +167,21 @@ public class FifamodReaderTests
         Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
             "content/character/player/player_50000/50247/var_0/face_50247_0_0_color"));
 
-        // Named EA-style player segment: not a "created" folder
+        // Named EA-style player segment: ORIGID var_0 — not force-added
         Assert.False(FifamodProjectAddedRecovery.IsCreatedPlayerAssetPath(
             "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/head_185221_0_0_mesh"));
         Assert.False(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
             "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/head_185221_0_0_mesh"));
+        Assert.True(FifamodProjectAddedRecovery.IsNamedPlayerVar0ModificationPath(
+            "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/head_185221_0_0_mesh"));
+        Assert.True(FifamodProjectAddedRecovery.IsNamedPlayerVar0ModificationPath(
+            "content/character/player/player_247500/michael_olise_247827/var_0/face_247827_0_0_color"));
+
+        // Named player var_2 is still force-added (new head variation)
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_190500/neymar_190871/var_2/head_190871_0_2_mesh"));
+        Assert.False(FifamodProjectAddedRecovery.IsNamedPlayerVar0ModificationPath(
+            "content/character/player/player_190500/neymar_190871/var_2/head_190871_0_2_mesh"));
 
         // Created kits: pure-numeric team folder
         Assert.True(FifamodProjectAddedRecovery.IsCreatedKitAssetPath(
@@ -181,9 +191,166 @@ public class FifamodReaderTests
         Assert.False(FifamodProjectAddedRecovery.IsCreatedKitAssetPath(
             "content/character/kit/kit_131500/milano_fc_131681/home_0_0/hotspots_131681_0_0"));
 
+        // Pack-only created content (Retro-style kits, worlds, wardrobe, bodyupper, …)
+        Assert.True(FifamodProjectAddedRecovery.IsPackOnlyCreatedAssetPath(
+            "content/character/kitnumber/307/numbers_307_8_color"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/kitnumber/308_launch_kit_brt"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/jerseyfonts/310/font_310"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/body/warpcloth/warpclothmeshpipelineextension_fc/runtimedata/a361f2bd-81bf-4ef9-bfa7-91aa16b420f4"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/worlds/flag/textures/some_flag_color"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/wardrobe/top/some_item_color"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/body/common/bodyupper_50797_0_0_color"));
+        // Strand add-ons even under named ORIGID faces
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_250500/jayde_riviere_250751/var_0/strand_hair_250751_0_0strandhairresource"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_250500/jayde_riviere_250751/var_0_strand_starhead_brt"));
+        // Face texture maps on named ORIGID (Retro face_normal "doesn't exist" → rainbow)
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/face_185221_0_0_normal"));
+        Assert.True(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/face_185221_0_0_color"));
+        // Mesh on named ORIGID stays non-added (TOC modification)
+        Assert.False(FifamodProjectAddedRecovery.IsForceAddedAssetPath(
+            "content/character/player/player_185000/luiz_gustavo_dias_185221/var_0/head_185221_0_0_mesh"));
+
         Assert.False(FifamodProjectAddedRecovery.IsCreatedPlayerAssetPath(null));
         Assert.False(FifamodProjectAddedRecovery.IsCreatedKitAssetPath(null));
         Assert.False(FifamodProjectAddedRecovery.IsForceAddedAssetPath(null));
+    }
+
+    [Fact]
+    public void CollectForceAddedChunkIds_ExcludesOrigidAndSharedChunks()
+    {
+        var origidChunk = new Guid("aaaaaaaa-1111-2222-3333-444444444444");
+        var createdChunk = new Guid("bbbbbbbb-1111-2222-3333-444444444444");
+        var worldsChunk = new Guid("cccccccc-1111-2222-3333-444444444444");
+
+        byte[] Tex(Guid id)
+        {
+            var b = new byte[TextureResBuilder.FixedSize];
+            id.ToByteArray().CopyTo(b.AsSpan(TextureResBuilder.ChunkIdOffset));
+            return b;
+        }
+
+        byte[] payload = { 1, 2, 3 };
+        var resources = new List<FifamodResource>
+        {
+            new() { Name = origidChunk.ToString(), Kind = FifamodResourceKind.Chunk, ChunkId = origidChunk, Data = payload, CompressedData = payload },
+            new() { Name = createdChunk.ToString(), Kind = FifamodResourceKind.Chunk, ChunkId = createdChunk, Data = payload, CompressedData = payload },
+            new() { Name = worldsChunk.ToString(), Kind = FifamodResourceKind.Chunk, ChunkId = worldsChunk, Data = payload, CompressedData = payload },
+            new()
+            {
+                Name = "content/character/player/player_247500/michael_olise_247827/var_0/face_247827_0_0_color",
+                Kind = FifamodResourceKind.Res,
+                ResType = TextureResBuilder.TextureResType,
+                Data = Tex(origidChunk),
+                CompressedData = Tex(origidChunk),
+            },
+            new()
+            {
+                Name = "content/character/player/player_1500/1607/var_0/face_1607_0_0_color",
+                Kind = FifamodResourceKind.Res,
+                ResType = TextureResBuilder.TextureResType,
+                Data = Tex(createdChunk),
+                CompressedData = Tex(createdChunk),
+            },
+            new()
+            {
+                Name = "content/worlds/flag/textures/flag_x_color",
+                Kind = FifamodResourceKind.Res,
+                ResType = TextureResBuilder.TextureResType,
+                Data = Tex(worldsChunk),
+                CompressedData = Tex(worldsChunk),
+            },
+        };
+
+        // Offline policy: never force-add chunks (empty set). Project header version 0
+        // makes FET AddChunk() missing GUIDs and modify existing ones safely.
+        var force = FifamodProjectAddedRecovery.CollectForceAddedChunkIds(resources);
+        Assert.Empty(force);
+    }
+
+    [Fact]
+    public void FifaprojectWriter_WritesLinkedAssets_ForTextureAndMesh()
+    {
+        var partitionGuid = new Guid("dddddddd-eeee-ffff-aaaa-bbbbbbbbbbbb");
+        byte[] ebxData = BuildMinimalRiffEbx(partitionGuid);
+        var texChunkId = new Guid("11111111-2222-3333-4444-555555555555");
+        var meshChunkId = new Guid("66666666-7777-8888-9999-aaaaaaaaaaaa");
+        byte[] texRes = new byte[TextureResBuilder.FixedSize];
+        texChunkId.ToByteArray().CopyTo(texRes.AsSpan(TextureResBuilder.ChunkIdOffset));
+        byte[] meshRes = new byte[400];
+        meshChunkId.ToByteArray().CopyTo(meshRes.AsSpan(324));
+        byte[] chunkBytes = { 9, 8, 7, 6 };
+
+        const string face = "content/character/player/player_1500/1607/var_0/face_1607_0_0_color";
+        const string head = "content/character/player/player_1500/1607/var_0/head_1607_0_0_mesh";
+
+        var mod = new FifamodFile
+        {
+            Path = "links.fifamod",
+            GameName = "FC26",
+            GameVersion = 1,
+            Details = new FifamodDetails { Title = "L", Author = "A", Version = "1", Description = "d" },
+            Resources = new[]
+            {
+                new FifamodResource
+                {
+                    Name = texChunkId.ToString(), Kind = FifamodResourceKind.Chunk, ChunkId = texChunkId,
+                    CompressedData = chunkBytes, Data = chunkBytes, UncompressedSize = chunkBytes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(chunkBytes),
+                },
+                new FifamodResource
+                {
+                    Name = meshChunkId.ToString(), Kind = FifamodResourceKind.Chunk, ChunkId = meshChunkId,
+                    CompressedData = chunkBytes, Data = chunkBytes, UncompressedSize = chunkBytes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(chunkBytes),
+                },
+                new FifamodResource
+                {
+                    Name = face, Kind = FifamodResourceKind.Res, ResType = TextureResBuilder.TextureResType,
+                    ResRid = 1, ResMeta = new byte[16], CompressedData = texRes, Data = texRes,
+                    UncompressedSize = texRes.Length, Sha1 = System.Security.Cryptography.SHA1.HashData(texRes),
+                },
+                new FifamodResource
+                {
+                    Name = head, Kind = FifamodResourceKind.Res, ResType = FifamodProjectAddedRecovery.MeshSetResType,
+                    ResRid = 2, ResMeta = new byte[16], CompressedData = meshRes, Data = meshRes,
+                    UncompressedSize = meshRes.Length, Sha1 = System.Security.Cryptography.SHA1.HashData(meshRes),
+                },
+                new FifamodResource
+                {
+                    Name = face, Kind = FifamodResourceKind.Ebx, CompressedData = ebxData, Data = ebxData,
+                    UncompressedSize = ebxData.Length, Sha1 = System.Security.Cryptography.SHA1.HashData(ebxData),
+                },
+                new FifamodResource
+                {
+                    Name = head, Kind = FifamodResourceKind.Ebx, CompressedData = ebxData, Data = ebxData,
+                    UncompressedSize = ebxData.Length, Sha1 = System.Security.Cryptography.SHA1.HashData(ebxData),
+                },
+            },
+        };
+
+        using var ms = new MemoryStream();
+        FifaprojectWriter.Write(ms, mod);
+        ms.Position = 0;
+        var summary = FifaprojectReader.ReadSummary(ms);
+
+        Assert.Equal(2, summary.EbxCount);
+        Assert.Equal(2, summary.AddedEbxCount);
+        Assert.Equal(2, summary.ResCount);
+        Assert.Equal(2, summary.AddedResCount);
+        Assert.Equal(2, summary.ChunkCount);
+        Assert.Equal(0, summary.AddedChunkCount); // chunks never offline-force-added
+        Assert.Empty(summary.Warnings);
+        Assert.Equal(0u, summary.GameVersion); // header forced outdated for FET reimport
     }
 
     [Fact]
@@ -294,11 +461,13 @@ public class FifamodReaderTests
         var summary = FifaprojectReader.ReadSummary(ms);
 
         Assert.Equal(2, summary.EbxCount);
-        Assert.Equal(1, summary.AddedEbxCount); // only var_1
+        // var_1 face + named var_0 face texture map (both force-added)
+        Assert.Equal(2, summary.AddedEbxCount);
         Assert.Equal(1, summary.ResCount);
         Assert.Equal(1, summary.AddedResCount);
         Assert.Equal(1, summary.ChunkCount);
-        Assert.Equal(1, summary.AddedChunkCount);
+        Assert.Equal(0, summary.AddedChunkCount); // chunks never offline-force-added
+        Assert.Equal(0u, summary.GameVersion); // header forced outdated
         Assert.Empty(summary.Warnings);
     }
 
@@ -387,11 +556,101 @@ public class FifamodReaderTests
         var summary = FifaprojectReader.ReadSummary(ms);
 
         Assert.Equal(3, summary.EbxCount);
-        Assert.Equal(2, summary.AddedEbxCount); // created face + created kit
+        // created face + created kit + named ORIGID hair texture map
+        Assert.Equal(3, summary.AddedEbxCount);
         Assert.Equal(1, summary.ResCount);
         Assert.Equal(1, summary.AddedResCount);
         Assert.Equal(1, summary.ChunkCount);
-        Assert.Equal(1, summary.AddedChunkCount);
+        Assert.Equal(0, summary.AddedChunkCount); // chunks never offline-force-added
+        Assert.Empty(summary.Warnings);
+    }
+
+    [Fact]
+    public void FifaprojectWriter_NamedPlayerVar0_ForcesTextureMaps_NotMeshes()
+    {
+        // ORIGID: face texture maps force-added (often missing from TOC); head mesh stays TOC mod.
+        var partitionGuid = new Guid("bbbbbbbb-cccc-dddd-eeee-ffffffffffff");
+        byte[] ebxData = BuildMinimalRiffEbx(partitionGuid);
+        byte[] ebxPayload = ebxData;
+
+        var texChunkId = new Guid("aaaaaaaa-1111-2222-3333-444444444444");
+        byte[] texRes = new byte[TextureResBuilder.FixedSize];
+        texChunkId.ToByteArray().CopyTo(texRes.AsSpan(TextureResBuilder.ChunkIdOffset));
+        byte[] chunkBytes = new byte[] { 1, 2, 3, 4 };
+
+        const string faceColor =
+            "content/character/player/player_247500/michael_olise_247827/var_0/face_247827_0_0_color";
+        const string headMesh =
+            "content/character/player/player_247500/michael_olise_247827/var_0/head_247827_0_0_mesh";
+
+        var mod = new FifamodFile
+        {
+            Path = "olise-origid.fifamod",
+            GameName = "FC26",
+            GameVersion = 2766047,
+            Details = new FifamodDetails
+            {
+                Title = "Olise ORIGID",
+                Author = "T",
+                Version = "1.0",
+                Description = "d",
+            },
+            Resources = new[]
+            {
+                new FifamodResource
+                {
+                    Name = texChunkId.ToString(),
+                    Kind = FifamodResourceKind.Chunk,
+                    ChunkId = texChunkId,
+                    CompressedData = chunkBytes,
+                    Data = chunkBytes,
+                    UncompressedSize = chunkBytes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(chunkBytes),
+                },
+                new FifamodResource
+                {
+                    Name = faceColor,
+                    Kind = FifamodResourceKind.Res,
+                    ResType = TextureResBuilder.TextureResType,
+                    ResRid = 1,
+                    ResMeta = new byte[16],
+                    CompressedData = texRes,
+                    Data = texRes,
+                    UncompressedSize = texRes.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(texRes),
+                },
+                new FifamodResource
+                {
+                    Name = faceColor,
+                    Kind = FifamodResourceKind.Ebx,
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+                new FifamodResource
+                {
+                    Name = headMesh,
+                    Kind = FifamodResourceKind.Ebx,
+                    CompressedData = ebxPayload,
+                    Data = ebxData,
+                    UncompressedSize = ebxData.Length,
+                    Sha1 = System.Security.Cryptography.SHA1.HashData(ebxPayload),
+                },
+            },
+        };
+
+        using var ms = new MemoryStream();
+        FifaprojectWriter.Write(ms, mod);
+        ms.Position = 0;
+        var summary = FifaprojectReader.ReadSummary(ms);
+
+        Assert.Equal(2, summary.EbxCount);
+        Assert.Equal(1, summary.AddedEbxCount); // face texture only, not head mesh
+        Assert.Equal(1, summary.ResCount);
+        Assert.Equal(1, summary.AddedResCount); // face texture res
+        Assert.Equal(1, summary.ChunkCount);
+        Assert.Equal(0, summary.AddedChunkCount);
         Assert.Empty(summary.Warnings);
     }
 

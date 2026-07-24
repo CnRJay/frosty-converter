@@ -298,11 +298,34 @@ public static class FifaprojectReader
         return s;
     }
 
+    /// <summary>
+    /// Skip FET <c>SaveLinkedAssets</c> table: count, then (type u8, name|guid) per entry.
+    /// Types: 0=EBX name, 1=Res name, 2=Chunk guid, 3=Legacy namehash u64.
+    /// </summary>
     private static void SkipLinkedAssets(EndianBinaryReader r)
     {
         int n = r.Read7BitEncodedInt();
-        if (n != 0)
-            throw new InvalidDataException("Linked assets present; offline skip not fully implemented.");
+        if (n < 0 || n > 1_000_000)
+            throw new InvalidDataException($"Unreasonable linked-asset count: {n}");
+        for (int i = 0; i < n; i++)
+        {
+            byte kind = r.ReadByte();
+            switch (kind)
+            {
+                case 0: // EBX
+                case 1: // Res
+                    _ = r.ReadLengthPrefixedString();
+                    break;
+                case 2: // Chunk
+                    _ = r.ReadGuid();
+                    break;
+                case 3: // Legacy
+                    _ = r.ReadUInt64();
+                    break;
+                default:
+                    throw new InvalidDataException($"Unknown linked asset type {kind} at index {i}.");
+            }
+        }
     }
 
     private static int SkipLuaModMap(EndianBinaryReader r)

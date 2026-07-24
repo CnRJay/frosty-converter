@@ -44,7 +44,6 @@ public static class FifaprojectWriter
 
         WriteHeader(w, mod);
 
-        // Added bundles — FET project layout: name, superBundle hash u32, type u8
         WriteUInt24(w, (uint)mod.AddedBundles.Count);
         foreach (var b in mod.AddedBundles)
         {
@@ -61,11 +60,17 @@ public static class FifaprojectWriter
             ? mod.Resources
             : mod.Resources.Concat(extraResources).ToList();
 
-        // .fifamod never stores IsAdded for EBX/Res (ModWriter clears it). New head variations
-        // (var_1+), created-player (numeric face folder), and created-kit (numeric team folder)
-        // paths must be project-IsAdded or FET skips them as "doesn't exist".
+        // Force IsAdded for created/pack-only paths; chunks exclusive to those RES only.
+        // Named ORIGID var_0 stays TOC mod (except strand-hair). Worlds stay non-force.
         HashSet<Guid> forceAddedChunks = FifamodProjectAddedRecovery.CollectForceAddedChunkIds(all);
         Dictionary<string, uint> resTypeByName = FifamodProjectAddedRecovery.BuildResTypeByName(all);
+
+        var knownChunkIds = new HashSet<Guid>(
+            all.Where(r => r.Kind == FifamodResourceKind.Chunk && r.ChunkId != Guid.Empty)
+                .Select(r => r.ChunkId));
+        var resByName = new Dictionary<string, FifamodResource>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in all.Where(x => x.Kind == FifamodResourceKind.Res && !string.IsNullOrEmpty(x.Name)))
+            resByName[r.Name] = r;
 
         // --- Chunks ---
         var chunks = all
@@ -96,7 +101,9 @@ public static class FifaprojectWriter
         foreach (var r in resList)
         {
             bool forceAdded = FifamodProjectAddedRecovery.ShouldForceAdded(r, forceAddedChunks);
-            WriteResEntry(w, mod, r, ProjectPayload(r), forceAdded);
+            var links = FifamodProjectAddedRecovery.BuildLinkedAssets(
+                r, all, knownChunkIds, resByName, forceAddedChunks);
+            WriteResEntry(w, mod, r, ProjectPayload(r), forceAdded, links);
             resWritten++;
         }
         long afterRes = stream.Position;
@@ -114,7 +121,9 @@ public static class FifaprojectWriter
         foreach (var e in ebxList)
         {
             bool forceAdded = FifamodProjectAddedRecovery.ShouldForceAdded(e, forceAddedChunks);
-            WriteEbxEntry(w, mod, e, ProjectPayload(e), forceAdded, resTypeByName);
+            var links = FifamodProjectAddedRecovery.BuildLinkedAssets(
+                e, all, knownChunkIds, resByName, forceAddedChunks);
+            WriteEbxEntry(w, mod, e, ProjectPayload(e), forceAdded, resTypeByName, links);
             ebxWritten++;
         }
         long afterEbx = stream.Position;
@@ -141,14 +150,17 @@ public static class FifaprojectWriter
     {
         w.WriteUInt32(MagicLe);
         w.WriteByte(ProjectVersion);
-        // Tool version stamped as FrostyConvert release (major.minor.build.revision)
         w.WriteByte(1);
         w.WriteByte(0);
         w.WriteByte(12);
         w.WriteByte(0);
 
         w.WriteLengthPrefixedString(mod.GameName);
-        WriteUInt24(w, mod.GameVersion);
+        // MUST differ from live fileSystem.Head so FET treats the project as outdated:
+        //   - missing non-added chunks are AddChunk()'d instead of "doesn't exist, skipping"
+        //   - AssetReimporter re-links texture/mesh payloads after load
+        // GameName still selects FC26; only the patch version is forced outdated.
+        WriteUInt24(w, 0);
 
         var d = mod.Details;
         w.WriteLengthPrefixedString(d.Title);
@@ -181,7 +193,6 @@ public static class FifaprojectWriter
             w.Write7BitEncodedInt(0);
         }
 
-        // Screenshots (same as EditorProject.WriteHeader)
         IReadOnlyList<byte[]> shots = d.Screenshots;
         w.Write7BitEncodedInt(shots.Count);
         foreach (byte[] shot in shots)
@@ -213,7 +224,6 @@ public static class FifaprojectWriter
                 w.WriteBytes(file.Data);
         }
 
-        // Free-form maps (new-format load uses version 100 → default branch)
         WriteLuaModMap(w, mod.PlayerLuaMods);
         WriteLuaModMap(w, mod.PlayerKitLuaMods);
     }
@@ -287,9 +297,10 @@ public static class FifaprojectWriter
                 w.WriteLengthPrefixedString(c.LegacyFileName ?? "");
         }
 
-        WriteUInt24(w, mod.GameVersion);
+        // Always 0 so FET AssetReimporter treats recovered assets as outdated and re-links
+        WriteUInt24(w, 0u);
         if (!isAdded)
-            w.WriteBytes(new byte[20]); // AssetSha1AtImport unknown offline
+            w.WriteBytes(new byte[20]);
 
         if (c.AddedBundleHashes.Length > 0)
         {
@@ -310,10 +321,12 @@ public static class FifaprojectWriter
         FifamodFile mod,
         FifamodResource r,
         byte[] payload,
-        bool forceAdded = false)
+        bool forceAdded = false,
+        IReadOnlyList<ProjectLinkedAssetRef>? links = null)
     {
         int originalSize = r.UncompressedSize > 0 ? r.UncompressedSize : payload.Length;
         bool isAdded = forceAdded || r.IsAdded;
+        links ??= Array.Empty<ProjectLinkedAssetRef>();
 
         w.WriteLengthPrefixedString(r.Name);
         var flags = FifamodResFlags.IsDirectlyModified;
@@ -321,6 +334,8 @@ public static class FifaprojectWriter
             flags |= FifamodResFlags.IsAdded;
         if (r.ResMeta is { Length: > 0 } || isAdded)
             flags |= FifamodResFlags.HasMeta;
+        if (links.Count > 0)
+            flags |= FifamodResFlags.HasLinkedAssets;
         if (r.AddedBundleHashes.Length > 0)
             flags |= FifamodResFlags.HasAddedBundles;
         if (r.BundleAssignmentOnly)
@@ -344,7 +359,8 @@ public static class FifaprojectWriter
             w.WriteBytes(meta);
         }
 
-        WriteUInt24(w, mod.GameVersion);
+        // Always 0 so FET AssetReimporter re-links after project load
+        WriteUInt24(w, 0u);
         if (!isAdded)
             w.WriteBytes(new byte[20]);
 
@@ -358,6 +374,9 @@ public static class FifaprojectWriter
         w.WriteByte(CompressionLevelFastest);
         w.Write7BitEncodedInt(payload.Length);
         w.WriteBytes(payload);
+
+        if (links.Count > 0)
+            WriteLinkedAssets(w, links);
     }
 
     private static void WriteEbxEntry(
@@ -366,11 +385,13 @@ public static class FifaprojectWriter
         FifamodResource e,
         byte[] payload,
         bool forceAdded = false,
-        IReadOnlyDictionary<string, uint>? resTypeByName = null)
+        IReadOnlyDictionary<string, uint>? resTypeByName = null,
+        IReadOnlyList<ProjectLinkedAssetRef>? links = null)
     {
         int originalSize = e.UncompressedSize > 0 ? e.UncompressedSize : payload.Length;
         bool isAdded = forceAdded || e.IsAdded;
         FifamodBrtAddition? brt = e.BrtAddition is { BrtNameHash: not 0 } b ? b : null;
+        links ??= Array.Empty<ProjectLinkedAssetRef>();
 
         w.WriteLengthPrefixedString(e.Name);
         var flags = FifamodEbxFlags.IsDirectlyModified;
@@ -384,6 +405,8 @@ public static class FifaprojectWriter
             if (brt.BundleRefOnly)
                 flags |= FifamodEbxFlags.BundleRefOnly;
         }
+        if (links.Count > 0)
+            flags |= FifamodEbxFlags.HasLinkedAssets;
         if (e.AddedBundleHashes.Length > 0)
             flags |= FifamodEbxFlags.HasAddedBundles;
         if (e.BundleAssignmentOnly)
@@ -409,9 +432,8 @@ public static class FifaprojectWriter
             w.WriteGuid(guid);
         }
 
-        // Order matches EditorProject.Save / Load for directly-modified EBX:
-        // gameVersion, AssetSha1AtImport, [BRT], [added bundles], sha1, sizes, payload.
-        WriteUInt24(w, mod.GameVersion);
+        // Always 0 so FET AssetReimporter re-links textures/meshes after load
+        WriteUInt24(w, 0u);
         if (!isAdded)
             w.WriteBytes(new byte[20]);
 
@@ -438,11 +460,38 @@ public static class FifaprojectWriter
         w.WriteByte(CompressionLevelFastest);
         w.Write7BitEncodedInt(payload.Length);
         w.WriteBytes(payload);
+
+        if (links.Count > 0)
+            WriteLinkedAssets(w, links);
+    }
+
+    /// <summary>
+    /// FET <c>EditorProject.SaveLinkedAssets</c>: count, then (type, name|guid) per link.
+    /// </summary>
+    private static void WriteLinkedAssets(EndianBinaryWriter w, IReadOnlyList<ProjectLinkedAssetRef> links)
+    {
+        w.Write7BitEncodedInt(links.Count);
+        foreach (var link in links)
+        {
+            w.WriteByte(link.Kind);
+            switch (link.Kind)
+            {
+                case FifamodProjectAddedRecovery.LinkedAssetTypeChunk:
+                    w.WriteGuid(link.ChunkId);
+                    break;
+                case FifamodProjectAddedRecovery.LinkedAssetTypeEbx:
+                case FifamodProjectAddedRecovery.LinkedAssetTypeRes:
+                    w.WriteLengthPrefixedString(link.Name ?? "");
+                    break;
+                default:
+                    w.WriteLengthPrefixedString(link.Name ?? "");
+                    break;
+            }
+        }
     }
 
     /// <summary>
     /// Prefer CAS-compressed bytes from the mod. FET decompresses ModifiedEntry.Data via codec headers.
-    /// For chunks, store the raw mod payload even when it is not multi-block CAS (sha already matched).
     /// </summary>
     internal static byte[] ProjectPayload(FifamodResource r)
     {

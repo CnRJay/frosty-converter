@@ -5,43 +5,68 @@ namespace FrostyConvert.Core.FifaMod;
 
 /// <summary>
 /// Offline heuristics so recovered <c>.fifaproject</c> files register assets that
-/// <c>ModWriter</c> never marks with <c>IsAdded</c>.
-/// <para>
-/// FET's project loader looks up non-added EBX/Res/Chunks in the live TOC. Missing entries
-/// become orphan modifications (warning: "doesn't exist") and never appear in Data Explorer.
-/// Paths that cannot exist in the base TOC are force-marked <c>IsAdded</c>:
-/// head variations (<c>var_N</c>, N≥1), created-player folders (numeric face id), and
-/// created-team kit folders (numeric team id), plus exclusive chunks those RES reference.
-/// </para>
+/// <c>ModWriter</c> never marks with <c>IsAdded</c>, plus best-effort linked-asset graphs.
 /// </summary>
 public static class FifamodProjectAddedRecovery
 {
     /// <summary>FC26 MeshSet RES type (same as mesh <c>*_mesh</c> payloads).</summary>
     public const uint MeshSetResType = 0x49B156D4;
 
+    /// <summary>FET <c>Sdk.Managers.AssetType</c> values used in project linked-asset tables.</summary>
+    public const byte LinkedAssetTypeEbx = 0;
+    public const byte LinkedAssetTypeRes = 1;
+    public const byte LinkedAssetTypeChunk = 2;
+
     /// <summary>
     /// Matches <c>.../var_N/...</c> or <c>.../var_N_starhead_brt</c> for N ≥ 1.
-    /// Named-player <c>var_0</c> is usually a TOC hit / modification.
     /// </summary>
     private static readonly Regex AddedHeadVariationPath = new(
         @"/var_([1-9]\d*)(/|_)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
-    /// Created / custom faces use a pure-numeric folder:
-    /// <c>…/player/player_50000/50247/var_0/…</c> (no firstname_lastname_id segment).
-    /// EA base faces use a named segment; those stay non-added so live TOC mods still apply.
+    /// Created / custom faces: pure-numeric folder under <c>player_XXXXX</c>.
     /// </summary>
     private static readonly Regex CreatedPlayerNumericFolder = new(
         @"/player/player_\d+/(\d+)(/|_)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
-    /// Created teams use a pure-numeric kit folder:
-    /// <c>…/kit/kit_150000/150039/home_0_0/jersey_…</c> (no club_name_id segment).
+    /// Created teams: pure-numeric kit folder under <c>kit_XXXXX</c>.
     /// </summary>
     private static readonly Regex CreatedKitNumericFolder = new(
         @"/kit/kit_\d+/(\d+)(/|_)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Named EA-style player face at <c>var_0</c> (ORIGID replacements).
+    /// </summary>
+    private static readonly Regex NamedPlayerVar0Path = new(
+        @"/player/player_\d+/[^/]*[A-Za-z][^/]*/var_0(/|_)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Strand-hair add-ons (often new even on named ORIGID faces).
+    /// </summary>
+    private static readonly Regex StrandHairAssetPath = new(
+        @"strandbind_|strandhair|(^|/)strand_|_strand_starhead",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Pack-only content that is almost never a stock FC26 TOC hit.
+    /// Includes worlds (created-team flags/scarves); exclusive-chunk policy avoids
+    /// force-adding TOC-shared chunk GUIDs that also appear on non-force paths.
+    /// </summary>
+    private static readonly Regex PackOnlyCreatedPath = new(
+        @"(^|/)kitnumber(/|_)"
+        + @"|(^|/)jerseyfonts/"
+        + @"|(^|/)warpcloth/.*/runtimedata/"
+        + @"|(^|/)content/worlds/"
+        + @"|(^|/)worlds/"
+        + @"|(^|/)character/balls?/"
+        + @"|(^|/)character/wardrobe/"
+        + @"|(^|/)character/shoe/"
+        + @"|(^|/)character/body/common/bodyupper_",
         RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static bool IsAddedHeadVariationPath(string? name)
@@ -51,7 +76,6 @@ public static class FifamodProjectAddedRecovery
         return AddedHeadVariationPath.IsMatch(name.Replace('\\', '/'));
     }
 
-    /// <summary>True for created-player paths with a numeric face-id folder (any <c>var_N</c>).</summary>
     public static bool IsCreatedPlayerAssetPath(string? name)
     {
         if (string.IsNullOrEmpty(name))
@@ -59,7 +83,6 @@ public static class FifamodProjectAddedRecovery
         return CreatedPlayerNumericFolder.IsMatch(name.Replace('\\', '/'));
     }
 
-    /// <summary>True for created-team kit paths with a numeric team-id folder.</summary>
     public static bool IsCreatedKitAssetPath(string? name)
     {
         if (string.IsNullOrEmpty(name))
@@ -67,48 +90,92 @@ public static class FifamodProjectAddedRecovery
         return CreatedKitNumericFolder.IsMatch(name.Replace('\\', '/'));
     }
 
+    public static bool IsNamedPlayerVar0ModificationPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        string n = name.Replace('\\', '/');
+        if (AddedHeadVariationPath.IsMatch(n))
+            return false;
+        if (CreatedPlayerNumericFolder.IsMatch(n))
+            return false;
+        return NamedPlayerVar0Path.IsMatch(n);
+    }
+
+    public static bool IsStrandHairAssetPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        return StrandHairAssetPath.IsMatch(name.Replace('\\', '/'));
+    }
+
+    public static bool IsPackOnlyCreatedAssetPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        return PackOnlyCreatedPath.IsMatch(name.Replace('\\', '/'));
+    }
+
     /// <summary>
-    /// Combined offline force-<c>IsAdded</c> path heuristic (head var_N≥1, created player, created kit).
+    /// Face/hair texture maps that are often absent from the live TOC even on named
+    /// ORIGID paths (e.g. Retro <c>face_*_normal</c>). Res force-add overwrites when
+    /// present; EBX force-add creates when missing.
+    /// </summary>
+    private static readonly Regex PlayerTextureMapPath = new(
+        @"/(face|hair|haircap|mouthbag)_[^/]+_(color|normal|specmask|coeff|ambient|roughness|opacity|cavity)$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    public static bool IsPlayerTextureMapPath(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+        return PlayerTextureMapPath.IsMatch(name.Replace('\\', '/'));
+    }
+
+    /// <summary>
+    /// Combined offline force-<c>IsAdded</c> path heuristic.
     /// </summary>
     public static bool IsForceAddedAssetPath(string? name)
     {
         if (string.IsNullOrEmpty(name))
             return false;
         string n = name.Replace('\\', '/');
+
+        // Named ORIGID var_0: meshes/blueprints stay TOC mods (need live mesh materials).
+        // Texture maps + strand-hair are frequently true adds even on named paths
+        // (log: face_*_normal "doesn't exist" → rainbow head preview).
+        if (IsNamedPlayerVar0ModificationPath(n))
+            return IsStrandHairAssetPath(n) || IsPlayerTextureMapPath(n);
+
         return AddedHeadVariationPath.IsMatch(n)
                || CreatedPlayerNumericFolder.IsMatch(n)
-               || CreatedKitNumericFolder.IsMatch(n);
+               || CreatedKitNumericFolder.IsMatch(n)
+               || PackOnlyCreatedPath.IsMatch(n)
+               || IsStrandHairAssetPath(n)
+               || IsPlayerTextureMapPath(n);
     }
 
     /// <summary>
-    /// Chunk GUIDs referenced only by force-added RES payloads.
-    /// Excludes GUIDs also referenced by other RES in the mod (shared / base replacements).
+    /// Chunk GUIDs that must be project-<c>IsAdded</c>.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Offline we deliberately return an <b>empty</b> set. FET's project loader, when
+    /// <c>Header.GameVersion != fileSystem.Head</c> (we write header version 0), will:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>Apply <c>ModifiedEntry</c> to existing TOC chunks (non-added path)</item>
+    /// <item><c>AddChunk()</c> missing GUIDs instead of "doesn't exist, skipping"</item>
+    /// </list>
+    /// <para>
+    /// Force-adding chunks that already exist orphans the payload ("already exists") and
+    /// breaks texture/mesh data — the root of rainbow mesh previews after recover.
+    /// </para>
+    /// </remarks>
     public static HashSet<Guid> CollectForceAddedChunkIds(IReadOnlyList<FifamodResource> resources)
     {
-        var knownChunks = new HashSet<Guid>();
-        foreach (var r in resources)
-        {
-            if (r.Kind == FifamodResourceKind.Chunk && r.ChunkId != Guid.Empty)
-                knownChunks.Add(r.ChunkId);
-        }
-
-        var fromAdded = new HashSet<Guid>();
-        var fromOther = new HashSet<Guid>();
-
-        foreach (var r in resources)
-        {
-            if (r.Kind != FifamodResourceKind.Res)
-                continue;
-            if (r.Data is not { Length: >= 16 })
-                continue;
-
-            bool force = IsForceAddedAssetPath(r.Name);
-            CollectChunkGuidsFromRes(r, knownChunks, force ? fromAdded : fromOther);
-        }
-
-        fromAdded.ExceptWith(fromOther);
-        return fromAdded;
+        _ = resources;
+        return new HashSet<Guid>();
     }
 
     /// <summary>Map of res name → res type for same-name EBX type guessing.</summary>
@@ -140,11 +207,134 @@ public static class FifamodProjectAddedRecovery
     }
 
     /// <summary>
-    /// Best-effort type name for project <c>IsAdded</c> EBX rows.
-    /// Prefer same-name RES type: Texture / MeshSet. Hair/head roots without RES are
-    /// <c>ObjectBlueprint</c> (or cloth variant) — labeling them <c>SkinnedMeshAsset</c>
-    /// makes FET open the mesh editor and crash with null RES entry.
+    /// Best-effort linked-asset graph for one resource (project <c>HasLinkedAssets</c>).
+    /// Texture/mesh EBX → same-name Res → force-added payload chunks;
+    /// head/hair meshes → co-located face/hair texture EBX (helps material reimport);
+    /// MeshVariationDatabase → sibling face/mesh EBX under the same head folder.
     /// </summary>
+    public static List<ProjectLinkedAssetRef> BuildLinkedAssets(
+        FifamodResource resource,
+        IReadOnlyList<FifamodResource> all,
+        IReadOnlySet<Guid> knownChunkIds,
+        IReadOnlyDictionary<string, FifamodResource> resByName,
+        IReadOnlySet<Guid>? forceAddedChunks = null)
+    {
+        var links = new List<ProjectLinkedAssetRef>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddRes(string? name)
+        {
+            if (string.IsNullOrEmpty(name) || !resByName.ContainsKey(name))
+                return;
+            string key = "res:" + name;
+            if (!seen.Add(key))
+                return;
+            links.Add(new ProjectLinkedAssetRef { Kind = LinkedAssetTypeRes, Name = name });
+        }
+
+        void AddChunk(Guid id)
+        {
+            if (id == Guid.Empty || !knownChunkIds.Contains(id))
+                return;
+            // Only link chunks that will load: force-added or always present as TOC mods.
+            // Linking non-added missing chunks floods the log with "linked CHUNK doesn't exist".
+            if (forceAddedChunks is not null && !forceAddedChunks.Contains(id))
+                return;
+            string key = "chunk:" + id.ToString("N");
+            if (!seen.Add(key))
+                return;
+            links.Add(new ProjectLinkedAssetRef { Kind = LinkedAssetTypeChunk, ChunkId = id });
+        }
+
+        void AddEbx(string? name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return;
+            if (!all.Any(r => r.Kind == FifamodResourceKind.Ebx
+                              && string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)))
+                return;
+            string key = "ebx:" + name;
+            if (!seen.Add(key))
+                return;
+            links.Add(new ProjectLinkedAssetRef { Kind = LinkedAssetTypeEbx, Name = name });
+        }
+
+        if (resource.Kind == FifamodResourceKind.Ebx && !string.IsNullOrEmpty(resource.Name))
+        {
+            string n = resource.Name.Replace('\\', '/');
+
+            // Same-name Res (Texture / MeshSet)
+            if (resByName.TryGetValue(resource.Name, out var sameRes))
+            {
+                AddRes(sameRes.Name);
+                foreach (Guid g in CollectChunkGuids(sameRes, knownChunkIds))
+                    AddChunk(g);
+            }
+
+            // Head/hair/haircap mesh → co-located face/hair texture EBX (mesh viewer material lookup)
+            if (n.EndsWith("_mesh", StringComparison.OrdinalIgnoreCase)
+                && (n.Contains("/head_", StringComparison.OrdinalIgnoreCase)
+                    || n.Contains("/hair_", StringComparison.OrdinalIgnoreCase)
+                    || n.Contains("/haircap_", StringComparison.OrdinalIgnoreCase)
+                    || n.Contains("/mouthbag_", StringComparison.OrdinalIgnoreCase)))
+            {
+                string? folder = GetParentPath(n);
+                if (folder is not null)
+                {
+                    foreach (var e in all.Where(r => r.Kind == FifamodResourceKind.Ebx
+                                                     && r.Name.Replace('\\', '/')
+                                                         .StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        string en = e.Name.Replace('\\', '/');
+                        if (en.EndsWith("_color", StringComparison.OrdinalIgnoreCase)
+                            || en.EndsWith("_normal", StringComparison.OrdinalIgnoreCase)
+                            || en.EndsWith("_specmask", StringComparison.OrdinalIgnoreCase)
+                            || en.EndsWith("_coeff", StringComparison.OrdinalIgnoreCase))
+                        {
+                            AddEbx(e.Name);
+                            if (resByName.TryGetValue(e.Name, out var tr))
+                            {
+                                AddRes(tr.Name);
+                                foreach (Guid g in CollectChunkGuids(tr, knownChunkIds))
+                                    AddChunk(g);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // MeshVariationDatabase → sibling face/mesh assets under the same head folder
+            if (resource.Name.Contains("meshvariationdb", StringComparison.OrdinalIgnoreCase))
+            {
+                int star = n.IndexOf("_starhead_brt", StringComparison.OrdinalIgnoreCase);
+                if (star > 0)
+                {
+                    string before = n[..star]; // …/var_0
+                    foreach (var e in all.Where(r => r.Kind == FifamodResourceKind.Ebx
+                                                     && r.Name.Replace('\\', '/')
+                                                         .StartsWith(before + "/", StringComparison.OrdinalIgnoreCase)
+                                                     && !string.Equals(r.Name, resource.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        AddEbx(e.Name);
+                        if (resByName.TryGetValue(e.Name, out var er))
+                        {
+                            AddRes(er.Name);
+                            foreach (Guid g in CollectChunkGuids(er, knownChunkIds))
+                                AddChunk(g);
+                        }
+                    }
+                }
+            }
+        }
+        else if (resource.Kind == FifamodResourceKind.Res && resource.Data is { Length: >= 16 })
+        {
+            foreach (Guid g in CollectChunkGuids(resource, knownChunkIds))
+                AddChunk(g);
+        }
+
+        return links;
+    }
+
     public static string GuessEbxTypeName(string? name, uint? matchingResType = null)
     {
         if (string.IsNullOrEmpty(name))
@@ -170,18 +360,12 @@ public static class FifamodProjectAddedRecovery
         if (Regex.IsMatch(n, @"_(color|normal|coeff|specmask|ambient|roughness|opacity|cavity)$"))
             return "TextureAsset";
 
-        // hair/head/haircap/mouthbag/hair_accessory roots: ObjectBlueprint that points at *_mesh.
-        // Cloth hair may be ClothObjectBlueprint in-game; ObjectBlueprint still opens property grid.
         if (Regex.IsMatch(n, @"/(head|hair|haircap|face|mouthbag|hair_accessory)_\d+_\d+_\d+$"))
             return "ObjectBlueprint";
 
         return "ObjectBlueprint";
     }
 
-    /// <summary>
-    /// Extract partition (file) GUID from RIFF EBX <c>EBXD</c> payload.
-    /// Observed FC26 layout: 12 zero pad bytes, then 16-byte GUID (not 16 zeros).
-    /// </summary>
     public static Guid? TryExtractRiffEbxGuid(byte[]? data)
     {
         if (data is null || data.Length < 28)
@@ -204,7 +388,6 @@ public static class FifamodProjectAddedRecovery
             {
                 int payload = pos + 8;
                 int end = Math.Min(data.Length, payload + Math.Max(0, size));
-                // Prefer 12-byte zero pad (common), then 16-byte pad, then raw start.
                 if (payload + 28 <= end && IsZero(data, payload, 12))
                 {
                     var g = new Guid(data.AsSpan(payload + 12, 16));
@@ -234,6 +417,22 @@ public static class FifamodProjectAddedRecovery
         return null;
     }
 
+    private static string? GetParentPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return null;
+        int i = path.LastIndexOf('/');
+        return i > 0 ? path[..i] : null;
+    }
+
+    private static List<Guid> CollectChunkGuids(FifamodResource r, IReadOnlySet<Guid> knownChunks)
+    {
+        var set = new HashSet<Guid>();
+        if (r.Data is { Length: >= 16 })
+            CollectChunkGuidsFromRes(r, knownChunks, set);
+        return set.ToList();
+    }
+
     private static bool IsZero(byte[] data, int offset, int count)
     {
         for (int i = 0; i < count; i++)
@@ -246,7 +445,7 @@ public static class FifamodProjectAddedRecovery
 
     private static void CollectChunkGuidsFromRes(
         FifamodResource r,
-        HashSet<Guid> knownChunks,
+        IReadOnlySet<Guid> knownChunks,
         HashSet<Guid> into)
     {
         byte[] d = r.Data!;
@@ -260,8 +459,6 @@ public static class FifamodProjectAddedRecovery
             return;
         }
 
-        // Mesh / other RES: scan for GUIDs that exist as chunks in this mod.
-        // 1-byte step catches unaligned LOD chunk IDs in MeshSet blobs.
         for (int i = 0; i + 16 <= d.Length; i++)
         {
             var g = new Guid(d.AsSpan(i, 16));
@@ -269,4 +466,14 @@ public static class FifamodProjectAddedRecovery
                 into.Add(g);
         }
     }
+}
+
+/// <summary>One linked-asset row for FET project load (<c>SaveLinkedAssets</c>).</summary>
+public sealed class ProjectLinkedAssetRef
+{
+    /// <summary><see cref="FifamodProjectAddedRecovery.LinkedAssetTypeEbx"/> / Res / Chunk.</summary>
+    public byte Kind { get; init; }
+
+    public string? Name { get; init; }
+    public Guid ChunkId { get; init; }
 }

@@ -26,25 +26,32 @@ Ground truth: decompiled **FIFA Editor Tool** `ModWriter.WriteProject` (FETM) an
 `ModWriter` **never** writes `IsAdded` for EBX or Res (it clears those bits). New legacy files only set `IsLegacyAdded` on chunks.  
 `EditorProject.Load` requires project `IsAdded` to **create** an asset; without it FET looks the name/GUID up in the live TOC and, on a miss, logs *"doesn't exist"* and leaves an orphan entry that **never appears in Data Explorer**.
 
-That is the main reason **face packs with head variation id ≥ 1** (`…/var_1/…`, `…/var_2/…`) and **created players/teams** looked empty after convert: those paths are always **new** assets (not TOC hits). Created faces use a pure-numeric folder (`…/player_50000/50247/var_0/…`); created kits use a pure-numeric team folder (`…/kit_150000/150039/…`). Named EA-style segments (`…/luiz_gustavo_dias_185221/…`) stay non-added so real-player replacements still resolve via live TOC.
+That is the main reason **face packs with head variation id ≥ 1** (`…/var_1/…`, `…/var_2/…`) and **created players/teams** looked empty after convert: those paths are always **new** assets (not TOC hits). Created faces use a pure-numeric folder (`…/player_50000/50247/var_0/…`); created kits use a pure-numeric team folder (`…/kit_150000/150039/…`). Pack-only trees (kit numbers, jersey fonts, warpcloth runtimedata, bodyupper, balls, wardrobe, shoe, strand-hair) are also force-added.
+
+Named EA-style **ORIGID** segments (`…/michael_olise_247827/var_0/…`) stay non-added so real-player replacements still resolve via live TOC — their chunk GUIDs already exist; force-adding those chunks makes FET drop payloads (`added chunk … already exists`) and crash texture preview. Exceptions on named faces: **strand-hair** and **face/hair texture maps** (often missing from TOC) are force-added.
 
 FrostyConvert treats assets as added when:
 
 | Kind | Force `IsAdded` when |
 |------|----------------------|
-| Chunk | Mod flag `IsAdded`, **or** `IsLegacyAdded`, **or** chunk GUID is referenced only by force-added Res (texture/mesh of a force-added path) |
-| Res / EBX | Mod flag `IsAdded`, **or** path matches `/var_N` with **N ≥ 1**, **or** created-player numeric face folder, **or** created-kit numeric team folder |
+| Chunk | Mod flag `IsAdded` / `IsLegacyAdded` only — **never offline-forced**. Project header `GameVersion=0` makes FET treat the project as outdated so missing chunks are `AddChunk()`'d and existing TOC chunks get `ModifiedEntry` applied (force-adding TOC hits orphans payloads). |
+| Res / EBX | Mod flag `IsAdded`, **or** path matches `/var_N` (N≥1), created-player/kit numeric folders, pack-only paths (kit numbers, jersey fonts, worlds, warpcloth, balls, wardrobe, shoe, bodyupper), strand-hair, or player texture maps |
 
 For force-added EBX we also write a best-effort type name (path heuristic) and partition GUID from the RIFF `EBXD` block when present.
+
+**Created-face mesh preview:** Named ORIGID heads bind textures via the stock game `MeshVariationDatabase`. Created faces only have a pack MVDB, so FET’s mesh viewer may show unbound materials (rainbow normals). Face `TextureAsset`s open correctly; Blender/export pipelines are unaffected. Offline mesh EBX rewrites are intentionally not applied.
+
+**Linked assets:** recovered projects emit best-effort `HasLinkedAssets` tables (Texture/Mesh EBX → same-name Res → payload chunks; MeshVariationDatabase → sibling face/mesh assets). FET still rebuilds a fuller graph after **File → Save**.
 
 ## Offline-impossible fields (not 1:1)
 
 | Field | Why |
 |-------|-----|
 | `AssetSha1AtImport` | Needs live game asset at import time → zeros offline |
-| `GamePatchVersionAtImport` | We write the mod’s `gameVersion` (best available) |
-| Linked assets graph | Not stored in `.fifamod`; FET rebuilds from live managers after load |
-| EBX/Res `IsAdded` when flag clear | Mod never stores it; we force it for `var_N` (N≥1), created-player/kit numeric folders, and their exclusive chunks. Named-player `var_0` assets that are truly new (no TOC entry) still need a live FET Save if they miss. |
+| `GamePatchVersionAtImport` | Written as **0** so assets are outdated and FET reimports after load |
+| Project header `GameVersion` | Written as **0** (not the mod’s patch) so `Header.GameVersion != fileSystem.Head` — enables missing-chunk `AddChunk` + AssetReimporter |
+| Linked assets graph | Best-effort offline links written; FET still rebuilds fuller graph after File → Save |
+| EBX/Res `IsAdded` when flag clear | Forced for created/pack-only paths, texture maps, strand-hair. ORIGID named `var_0` meshes/blueprints stay non-added (TOC mods). Named club kit renames may still need a live FET Save if they miss. |
 | Exact FET tool version bytes | Written as `0.1.0.0` |
 | Collectors / BRT name footers on project | Project format has no trailing tables; export regenerates them |
 | Password-locked mods (FMT Pro) | Detected via header/decompress heuristics; cannot unlock without author password/key |
